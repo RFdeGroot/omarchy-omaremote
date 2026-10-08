@@ -3,11 +3,13 @@ import qs.Commons
 import qs.Ui
 
 // The dropdown drawn from sample data (no real connections), in the popup card the bar uses, for
-// preview.png. tests/preview.sh renders it offscreen; set SAMPLE=missing for the install state.
+// preview.png. tests/preview.sh renders it offscreen; its second argument picks another state
+// ("missing" for the install row, "error" for a failed session read).
 Item {
   id: stage
 
   readonly property bool missing: Qt.application.arguments.indexOf("missing") >= 0 || sampleState === "missing"
+  readonly property bool readError: sampleState === "error"
   property string sampleState: ""
   property url bodySource: ""
 
@@ -22,6 +24,7 @@ Item {
     property string version: "0.1.3-alpha"
     property string minimumVersion: "0.1.3-alpha"
     property bool appRunning: true
+    property bool readError: stage.readError
     property var active: stage.missing ? [] : [
       { connection: "s-pi", name: "Raspberry Pi", protocol: "vnc", state: "connected", tab: true },
       { connection: "s-files", name: "File Server", protocol: "rdp", state: "connecting", tab: true }
@@ -43,11 +46,12 @@ Item {
     property color foreground: Color.foreground
     property color dim: Qt.darker(Color.foreground, 1.55)
     property string fontFamily: Style.font.family
-    property string summary: stage.missing ? "Not installed" : "2 sessions running"
+    property string summary: stage.missing ? "Not installed" : stage.readError ? "Sessions unknown" : "2 sessions running"
     property bool busy: !stage.missing
-    property bool cursorActive: true
+    property bool cursorActive: !stage.readError
     property int cursorIndex: stage.missing ? 0 : 2
     function rowHasCursor(i) { return cursorActive && cursorIndex === i }
+    function pointerMoved(i, item, mouse) {}
     function activate(i) {}
     function close() {}
   }

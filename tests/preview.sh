@@ -1,6 +1,7 @@
 #!/bin/bash
 # tests/preview.sh [out.png] [missing]: render the dropdown from sample data offscreen, in the
-# current Omarchy theme, at 2x. Default output: preview.png; "missing" draws the install state.
+# current Omarchy theme, at 2x. Default output: preview.png; "missing" draws the install state,
+# "error" a failed session read.
 # Omarchy's shell modules are linked into a temporary folder, as plugin folders may hold no links.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)

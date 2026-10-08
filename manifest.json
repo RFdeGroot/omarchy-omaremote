@@ -7,10 +7,12 @@
   "license": "MIT",
   "description": "Your OMARemote remote desktops in the Omarchy bar: running sessions and favourite connections, one click to bring a session forward or connect. Offers to install OMARemote when it is missing.",
   "kinds": [
-    "bar-widget"
+    "bar-widget",
+    "service"
   ],
   "entryPoints": {
-    "barWidget": "Panel.qml"
+    "barWidget": "Panel.qml",
+    "service": "Service.qml"
   },
   "barWidget": {
     "displayName": "OMARemote",

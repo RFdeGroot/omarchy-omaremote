@@ -13,6 +13,13 @@ Column {
 
   spacing: Style.space(12)
 
+  // The row the panel's cursor index points at, in the order of host.rows.
+  function rowItem(index) {
+    if (!host.remote.compatible) return index === 0 ? installRow : null
+    var active = host.remote.active.length
+    return index < active ? activeRows.itemAt(index) : favouriteRows.itemAt(index - active)
+  }
+
   PanelHero {
     id: hero
     width: parent.width
@@ -42,6 +49,7 @@ Column {
 
   // Missing or too old: one action, which opens a terminal to install the newest release.
   ActionRow {
+    id: installRow
     visible: !host.remote.compatible
     width: parent.width
     rowIndex: 0
@@ -53,8 +61,19 @@ Column {
       : "RDP and VNC remote desktops, in tabs"
   }
 
+  // omaremote-session failed: say so rather than show an empty or stale list as if it were true.
+  Text {
+    visible: host.remote.compatible && host.remote.readError
+    width: parent.width
+    text: "Could not read OMARemote's sessions. Press r to retry."
+    color: host.dim
+    font.family: host.fontFamily
+    font.pixelSize: Style.font.bodySmall
+    wrapMode: Text.WordWrap
+  }
+
   Column {
-    visible: host.remote.compatible && host.remote.active.length > 0
+    visible: host.remote.compatible && !host.remote.readError && host.remote.active.length > 0
     width: parent.width
     spacing: Style.space(6)
 
@@ -64,6 +83,7 @@ Column {
       fontFamily: host.fontFamily
     }
     Repeater {
+      id: activeRows
       model: host.remote.compatible ? host.remote.active : []
       ActionRow {
         required property var modelData
@@ -78,8 +98,10 @@ Column {
     }
   }
 
+  // Hidden when every favourite is running: they are all under ACTIVE then.
   Column {
-    visible: host.remote.compatible
+    visible: host.remote.compatible && !host.remote.readError
+      && (host.remote.favourites.length > 0 || !Model.hasFavourites(host.remote.connections))
     width: parent.width
     spacing: Style.space(6)
 
@@ -99,6 +121,7 @@ Column {
       wrapMode: Text.WordWrap
     }
     Repeater {
+      id: favouriteRows
       model: host.remote.compatible ? host.remote.favourites : []
       ActionRow {
         required property var modelData
@@ -130,10 +153,7 @@ Column {
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onEntered: {
-        column.host.cursorActive = true
-        column.host.cursorIndex = actionRow.rowIndex
-      }
+      onPositionChanged: function (mouse) { column.host.pointerMoved(actionRow.rowIndex, actionRow, mouse) }
       onClicked: column.host.activate(actionRow.rowIndex)
     }
 

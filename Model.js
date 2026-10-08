@@ -64,23 +64,32 @@ function favourites(connections, sessions) {
     .sort(byName)
 }
 
-// The connections out of connections.json, or [] when it is missing or not JSON.
-function parseConnections(text) {
+// The connections out of connections.json. Text that is empty or not JSON is most likely a file
+// caught mid-rewrite, so it yields `previous` (the last good read) rather than an empty list.
+function parseConnections(text, previous) {
+  var fallback = Array.isArray(previous) ? previous : []
   try {
-    var data = JSON.parse(String(text || "{}"))
+    var data = JSON.parse(String(text || ""))
     if (Array.isArray(data)) return data
-    return Array.isArray(data.connections) ? data.connections : []
+    return data && Array.isArray(data.connections) ? data.connections : []
   } catch (e) {
-    return []
+    return fallback
   }
 }
 
-function parseSessions(text) {
+function hasFavourites(connections) {
+  return (connections || []).some(function (c) { return c && c.favourite === true })
+}
+
+// The sessions out of `omaremote-session list`; `fallback` (default []) for output that is not a
+// JSON array, so the service can tell a failed read from an empty list.
+function parseSessions(text, fallback) {
+  if (fallback === undefined) fallback = []
   try {
     var data = JSON.parse(String(text || "[]"))
-    return Array.isArray(data) ? data : []
+    return Array.isArray(data) ? data : fallback
   } catch (e) {
-    return []
+    return fallback
   }
 }
 
@@ -98,32 +107,36 @@ function favouriteMeta(connection) {
 }
 
 // One line for the panel's hero: what is going on right now.
-function summary(installed, compatible, appRunning, activeCount) {
+function summary(installed, compatible, appRunning, activeCount, readError) {
   if (!installed) return "Not installed"
   if (!compatible) return "Needs a newer OMARemote"
+  if (readError) return "Sessions unknown"
   if (activeCount === 1) return "1 session running"
   if (activeCount > 1) return activeCount + " sessions running"
   return appRunning ? "No sessions running" : "Closed"
 }
 
 // Downloads the newest release for this machine (alphas included) and installs it with pacman,
-// then starts OMARemote. Run in a terminal, so sudo can ask for the password.
+// then starts OMARemote through uwsm-app, as the panel does. Run in a terminal, so sudo can ask
+// for the password. The subshell keeps `set -e` and `exit` away from the terminal's wrapper
+// script, which would otherwise close the window before a failure can be read.
 function installCommand() {
-  return "set -e; " +
+  return "(set -e; " +
     "url=$(curl -fsSL https://api.github.com/repos/" + REPOSITORY + "/releases" +
-    " | grep -o \"https://[^\\\"]*-$(uname -m)\\.pkg\\.tar\\.zst\" | head -1); " +
-    "[ -n \"$url\" ] || { echo \"No OMARemote release found for $(uname -m).\"; exit 1; }; " +
-    "cd \"$(mktemp -d)\"; " +
-    "curl -fLO \"$url\"; " +
-    "sudo pacman -U \"./${url##*/}\"; " +
-    "setsid -f omaremote >/dev/null 2>&1"
+    " | grep -o \"https://[^\\\"]*/omaremote-[0-9][^/\\\"]*-$(uname -m)\\.pkg\\.tar\\.zst\\\"\"" +
+    " | head -1 | tr -d '\"'); " +
+    "[ -n \"$url\" ] || { echo \"Could not find an OMARemote release for $(uname -m) on GitHub.\"; exit 1; }; " +
+    "dir=$(mktemp -d); trap 'rm -rf \"$dir\"' EXIT; " +
+    "curl -fL -o \"$dir/${url##*/}\" \"$url\"; " +
+    "sudo pacman -U \"$dir/${url##*/}\"; " +
+    "setsid -f uwsm-app -- omaremote >/dev/null 2>&1)"
 }
 
 if (typeof module !== "undefined")
   module.exports = {
     parseVersion: parseVersion, compareVersions: compareVersions, versionAtLeast: versionAtLeast,
     isActive: isActive, activeSessions: activeSessions, favourites: favourites,
-    parseConnections: parseConnections, parseSessions: parseSessions,
+    parseConnections: parseConnections, hasFavourites: hasFavourites, parseSessions: parseSessions,
     sessionMeta: sessionMeta, favouriteMeta: favouriteMeta, summary: summary,
     installCommand: installCommand
   }

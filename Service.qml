@@ -7,6 +7,8 @@ import "Model.js" as Model
 // What the panel shows, read from OMARemote itself: whether it is installed (and new enough),
 // whether its window is open, its favourite connections, and the sessions it runs. Sessions and
 // connections are watched, not polled: OMARemote touches a "changes" file on every session event.
+// Omarchy loads one copy as the plugin's service, shared by the bars on every monitor; a bar
+// without access to it (a replacement bar) makes its own (see Panel.qml).
 Item {
   id: root
 
@@ -34,6 +36,13 @@ Item {
 
   property string changesPath: ""
   property string connectionsPath: ""
+  property bool connectionsLoaded: false
+
+  // omaremote-session answered with an error (or nothing usable): the panel says so instead of
+  // showing an empty or stale list as if it were true.
+  property bool pathsFailed: false
+  property bool listFailed: false
+  readonly property bool readError: compatible && (pathsFailed || listFailed)
 
   function refresh() {
     if (!versionProcess.running)
@@ -50,15 +59,17 @@ Item {
   }
 
   // Shows the connection's running session, or connects it in a tab; starts OMARemote if needed.
+  // Launched through uwsm-app, as Omarchy launches apps, so a newly started OMARemote runs in its
+  // own unit rather than as a child of the shell.
   function open(connectionId) {
     if (root.compatible)
-      Quickshell.execDetached(["omaremote", "open", connectionId])
+      Quickshell.execDetached(["uwsm-app", "--", "omaremote", "open", connectionId])
   }
 
   // The connection manager itself (a second launch focuses the open window).
   function openApp() {
     if (root.installed)
-      Quickshell.execDetached(["omaremote"])
+      Quickshell.execDetached(["uwsm-app", "--", "omaremote"])
   }
 
   // Installs (or updates to) the newest release in a floating Omarchy terminal, where sudo can
@@ -71,6 +82,18 @@ Item {
   }
 
   Component.onCompleted: refresh()
+
+  // The install poll covers an install started from the panel. OMARemote's window appearing is the
+  // cue for one done some other way, and for the bars of a replacement bar, which each run their
+  // own copy of this service.
+  onAppRunningChanged: if (appRunning && !compatible) refresh()
+
+  // A file watch only attaches to a file that exists, so a connections file that appears later
+  // (a fresh install) is read again whenever there is a reason to look.
+  function reloadConnections() {
+    if (root.connectionsPath !== "" && !root.connectionsLoaded)
+      connectionsFile.reload()
+  }
 
   Process {
     id: versionProcess
@@ -96,15 +119,18 @@ Item {
     command: ["omaremote-session", "paths"]
     stdout: StdioCollector { id: pathsOutput; waitForEnd: true }
     onExited: function (exitCode) {
-      if (exitCode !== 0)
-        return
+      var paths = null
       try {
-        var paths = JSON.parse(pathsOutput.text)
-        root.connectionsPath = paths.connections || ""
-        root.changesPath = paths.changes || ""
+        if (exitCode === 0) paths = JSON.parse(pathsOutput.text)
       } catch (e) {
-        return
+        paths = null
       }
+      root.pathsFailed = !paths || !paths.connections || !paths.changes
+      if (root.pathsFailed)
+        return
+      root.connectionsPath = paths.connections
+      root.changesPath = paths.changes
+      root.reloadConnections()
       root.listSessions()
     }
   }
@@ -115,8 +141,10 @@ Item {
     command: ["omaremote-session", "list"]
     stdout: StdioCollector { id: listOutput; waitForEnd: true }
     onExited: function (exitCode) {
-      if (exitCode === 0)
-        root.sessions = Model.parseSessions(listOutput.text)
+      var parsed = exitCode === 0 ? Model.parseSessions(listOutput.text, null) : null
+      root.listFailed = parsed === null
+      if (parsed)
+        root.sessions = parsed
       if (again) {
         again = false
         running = true
@@ -125,12 +153,19 @@ Item {
   }
 
   FileView {
+    id: connectionsFile
     path: root.connectionsPath
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.connections = Model.parseConnections(text())
-    onLoadFailed: root.connections = []
+    onLoaded: {
+      root.connectionsLoaded = true
+      root.connections = Model.parseConnections(text(), root.connections)
+    }
+    onLoadFailed: {
+      root.connectionsLoaded = false
+      root.connections = []
+    }
   }
 
   FileView {
@@ -140,6 +175,7 @@ Item {
     onFileChanged: {
       reload()
       root.listSessions()
+      root.reloadConnections()
     }
   }
 

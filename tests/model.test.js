@@ -38,7 +38,31 @@ test("parsing tolerates missing or broken files", () => {
   assert.deepStrictEqual(Model.parseConnections(""), [])
   assert.deepStrictEqual(Model.parseConnections("not json"), [])
   assert.strictEqual(Model.parseConnections(JSON.stringify({ connections })).length, 4)
+  assert.strictEqual(Model.parseConnections(JSON.stringify(connections)).length, 4)
+  assert.deepStrictEqual(Model.parseConnections("{}"), [])
   assert.deepStrictEqual(Model.parseSessions("{}"), [])
+})
+
+test("a failed session read is told apart from no sessions", () => {
+  assert.strictEqual(Model.parseSessions("not json", null), null)
+  assert.strictEqual(Model.parseSessions("{}", null), null)
+  assert.deepStrictEqual(Model.parseSessions("[]", null), [])
+  assert.strictEqual(Model.summary(true, true, true, 0, true), "Sessions unknown")
+  assert.strictEqual(Model.summary(false, false, false, 0, true), "Not installed")
+})
+
+test("a connections file caught mid-rewrite keeps the last good read", () => {
+  assert.strictEqual(Model.parseConnections("", connections), connections)
+  assert.strictEqual(Model.parseConnections('{"connections": [{"id": "pi"', connections), connections)
+  assert.deepStrictEqual(Model.parseConnections('{"connections": []}', connections), [])
+})
+
+test("favourites exist even when all of them are running", () => {
+  assert.ok(Model.hasFavourites(connections))
+  assert.ok(!Model.hasFavourites([{ id: "build", favourite: false }]))
+  assert.ok(!Model.hasFavourites([]))
+  const allRunning = [{ id: "pi", state: "connected", connection: "pi" }]
+  assert.deepStrictEqual(Model.favourites([connections[0]], allRunning), [])
 })
 
 test("row and hero text", () => {
@@ -56,4 +80,55 @@ test("install command fetches the newest release for this machine", () => {
   assert.match(cmd, /api\.github\.com\/repos\/RFdeGroot\/OMARemote\/releases/)
   assert.match(cmd, /\$\(uname -m\)/)
   assert.match(cmd, /sudo pacman -U/)
+})
+
+// Runs the command the way omarchy-launch-floating-terminal-with-presentation does (inside a
+// larger bash -c script), with curl, sudo and setsid replaced by stubs that log what they get.
+function runInstall(releasesJson) {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path")
+  const { spawnSync } = require("node:child_process")
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-install-test-"))
+  try {
+    const bin = path.join(work, "bin")
+    fs.mkdirSync(bin)
+    fs.writeFileSync(path.join(work, "releases.json"), releasesJson)
+    const stub = (name, body) => fs.writeFileSync(path.join(bin, name), "#!/bin/bash\n" + body + "\n", { mode: 0o755 })
+    stub("curl", 'echo "curl $*" >> "$LOG"\n' +
+      'out=; prev=; for a in "$@"; do [[ $prev == -o ]] && out=$a; prev=$a; done\n' +
+      'if [[ -n $out ]]; then echo pkg > "$out"; else cat "$WORK/releases.json"; fi')
+    stub("uname", "echo x86_64")
+    stub("sudo", 'echo "sudo $*" >> "$LOG"; [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"')
+    stub("setsid", 'echo "setsid $*" >> "$LOG"')
+    const log = path.join(work, "log")
+    const script = "echo before; " + Model.installCommand() + "; echo \"after $?\""
+    const r = spawnSync("bash", ["-c", script], {
+      encoding: "utf8",
+      env: { PATH: bin + ":" + process.env.PATH, LOG: log, WORK: work, TMPDIR: work }
+    })
+    const left = fs.readdirSync(work).filter(n => n.startsWith("tmp."))
+    return { stdout: r.stdout, log: fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "", left }
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true })
+  }
+}
+
+test("install command: downloads this machine's package, installs it, cleans up", () => {
+  const base = "https://github.com/RFdeGroot/OMARemote/releases/download/v0.2.0"
+  const r = runInstall(JSON.stringify([{ assets: [
+    { browser_download_url: base + "/omaremote-debug-0.2.0-1-x86_64.pkg.tar.zst" },
+    { browser_download_url: base + "/omaremote-0.2.0-1-aarch64.pkg.tar.zst" },
+    { browser_download_url: base + "/omaremote-0.2.0-1-x86_64.pkg.tar.zst.sig" },
+    { browser_download_url: base + "/omaremote-0.2.0-1-x86_64.pkg.tar.zst" }
+  ] }]))
+  assert.match(r.log, /curl -fL -o \S+\/omaremote-0\.2\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.2\.0-1-x86_64\.pkg\.tar\.zst\n/)
+  assert.match(r.log, /sudo pacman -U \S+\/omaremote-0\.2\.0-1-x86_64\.pkg\.tar\.zst\npackage present/)
+  assert.match(r.log, /setsid -f uwsm-app -- omaremote/)
+  assert.match(r.stdout, /after 0/)
+  assert.deepStrictEqual(r.left, [])
+})
+
+test("install command: a failure ends the install, not the terminal's script", () => {
+  const r = runInstall("[]")
+  assert.match(r.stdout, /^before\nCould not find an OMARemote release for x86_64 on GitHub\.\nafter 1\n$/)
+  assert.doesNotMatch(r.log, /sudo/)
 })

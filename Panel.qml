@@ -23,13 +23,13 @@ Panel {
   readonly property bool busy: remote.appRunning || remote.active.length > 0
   readonly property color barIconColor: busy || !remote.compatible ? barForeground : Qt.darker(barForeground, 1.55)
   readonly property string summary: remote.installing ? "Installing…"
-    : Model.summary(remote.installed, remote.compatible, remote.appRunning, remote.active.length)
+    : Model.summary(remote.installed, remote.compatible, remote.appRunning, remote.active.length, remote.readError)
 
   // Every row the cursor can land on, top to bottom.
   readonly property var rows: {
     var out = []
     if (!remote.compatible) out.push({ kind: "install" })
-    else {
+    else if (!remote.readError) {
       remote.active.forEach(function (s) { out.push({ kind: "session", item: s }) })
       remote.favourites.forEach(function (c) { out.push({ kind: "favourite", item: c }) })
     }
@@ -48,18 +48,45 @@ Panel {
 
   function moveCursor(dy) {
     cursorActive = true
+    pointerGate.reset()
     if (rows.length === 0) return
     cursorIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex + dy))
+    scrollCursorIntoView()
+  }
+
+  // The panel caps its height, so a long FAVOURITES list scrolls; keep the keyboard cursor in
+  // view. Hover leaves the scroll alone: the row under the pointer is on screen already.
+  function scrollCursorIntoView() {
+    Qt.callLater(function () {
+      var item = column.rowItem(cursorIndex)
+      if (!item) return
+      // The first row brings the hero and its section header back as well.
+      if (cursorIndex === 0) { panelFlick.contentY = 0; return }
+      var margin = Style.space(6)
+      var top = item.mapToItem(panelFlick.contentItem, 0, 0).y
+      var bottom = top + item.height
+      var maxY = Math.max(0, panelFlick.contentHeight - panelFlick.height)
+      if (top < panelFlick.contentY + margin) panelFlick.contentY = Math.max(0, top - margin)
+      else if (bottom > panelFlick.contentY + panelFlick.height - margin)
+        panelFlick.contentY = Math.min(maxY, bottom + margin - panelFlick.height)
+    })
+  }
+
+  // Hover moves the cursor only when the pointer itself moves: rows scrolling under a resting
+  // pointer would otherwise take the cursor away from the keyboard.
+  function pointerMoved(index, item, mouse) {
+    if (!pointerGate.moved(item, mouse)) return
+    cursorActive = true
+    cursorIndex = index
   }
 
   function activate(index) {
     var row = rows[index]
     if (!row) return
+    // Also while installing: the terminal may have been closed before it finished.
     if (row.kind === "install") {
-      if (!remote.installing) {
-        remote.install()
-        root.close()
-      }
+      remote.install()
+      root.close()
       return
     }
     remote.open(row.kind === "session" ? row.item.connection : row.item.id)
@@ -69,6 +96,7 @@ Panel {
   onOpenedChanged: if (opened) {
     cursorActive = false
     cursorIndex = 0
+    pointerGate.reset()
     if (panelFlick) panelFlick.contentY = 0
     remote.refresh()
     remote.listSessions()
@@ -76,9 +104,46 @@ Panel {
   }
   onRowsChanged: cursorIndex = Math.max(0, Math.min(cursorIndex, rows.length - 1))
 
-  Service { id: service }
-  // For PanelBody, which reads the service through its host.
-  readonly property var remote: service
+  // One Service for the bars on every monitor: Omarchy loads it once as this plugin's service and
+  // hands it to widgets in the built-in bar. A replacement bar gets no service lookup, so there
+  // each copy of the widget runs its own.
+  readonly property var sharedService: bar && bar.shell && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor(moduleName) : null
+
+  Loader {
+    id: ownService
+    active: !root.sharedService
+    sourceComponent: Component { Service { } }
+  }
+
+  // Stands in for the few moments neither exists (between the two while one is torn down).
+  QtObject {
+    id: noService
+    readonly property bool checked: false
+    readonly property bool installed: false
+    readonly property bool compatible: false
+    readonly property bool installing: false
+    readonly property bool appRunning: false
+    readonly property bool readError: false
+    readonly property string version: ""
+    readonly property string minimumVersion: ""
+    readonly property var connections: []
+    readonly property var active: []
+    readonly property var favourites: []
+    function refresh() {}
+    function listSessions() {}
+    function open(id) {}
+    function openApp() {}
+    function install() {}
+  }
+
+  // For PanelBody too, which reads the service through its host.
+  readonly property var remote: sharedService || ownService.item || noService
+
+  PointerMoveGate {
+    id: pointerGate
+    referenceItem: panelFlick
+  }
 
   BarIconButton {
     id: button
