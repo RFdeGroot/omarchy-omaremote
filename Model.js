@@ -97,9 +97,42 @@ function protocolLabel(item) {
   return String((item && item.protocol) || "rdp").toUpperCase()
 }
 
+// The connections set to open in a window of their own, as kept in the widget's settings.
+function windowConnections(value) {
+  return Array.isArray(value) ? value.map(String) : []
+}
+
+function opensInWindow(list, connectionId) {
+  return windowConnections(list).indexOf(String(connectionId)) !== -1
+}
+
+// `list` with the choice for one connection changed. Ids of connections that no longer exist
+// (`known`: the ids of saved connections and running sessions) are dropped on the way.
+function setOpensInWindow(list, connectionId, on, known) {
+  var id = String(connectionId)
+  var keep = (known || []).map(String)
+  var out = windowConnections(list).filter(function (c) { return c !== id && keep.indexOf(c) !== -1 })
+  if (on) out.push(id)
+  return out
+}
+
+// `view` says where a session is shown now. An older OMARemote has no `view`; there only a
+// session it does not draw itself (`tab` false) has a window of its own.
+function inOwnWindow(session) {
+  return typeof session.view === "string" ? session.view === "window" : session.tab === false
+}
+
+// The command a click runs: bring the session forward, or connect. With `inWindow`, the session
+// goes to a floating window of its own on the current workspace (OMARemote 0.1.6-alpha and newer).
+// Through uwsm-app, as Omarchy launches apps, so a newly started OMARemote runs in its own unit
+// rather than as a child of the shell.
+function openCommand(connectionId, inWindow) {
+  return ["uwsm-app", "--", "omaremote", "open"].concat(inWindow ? ["--window"] : [], [String(connectionId)])
+}
+
 function sessionMeta(session) {
   var state = session.state === "connecting" ? "connecting…" : "connected"
-  return protocolLabel(session) + " · " + state + (session.tab === false ? " · own window" : "")
+  return protocolLabel(session) + " · " + state + (inOwnWindow(session) ? " · own window" : "")
 }
 
 function favouriteMeta(connection) {
@@ -138,5 +171,6 @@ if (typeof module !== "undefined")
     isActive: isActive, activeSessions: activeSessions, favourites: favourites,
     parseConnections: parseConnections, hasFavourites: hasFavourites, parseSessions: parseSessions,
     sessionMeta: sessionMeta, favouriteMeta: favouriteMeta, summary: summary,
-    installCommand: installCommand
+    installCommand: installCommand, openCommand: openCommand,
+    windowConnections: windowConnections, opensInWindow: opensInWindow, setOpensInWindow: setOpensInWindow
   }

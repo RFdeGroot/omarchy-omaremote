@@ -13,12 +13,18 @@ Item {
   id: root
 
   property string minimumVersion: "0.1.3-alpha"
+  // `omaremote open --window`, for the "Open in own window" toggle.
+  property string windowVersion: "0.1.6-alpha"
 
   property bool checked: false
   property bool installed: false
   property string version: ""
   readonly property bool compatible: installed && Model.versionAtLeast(version, minimumVersion)
+  readonly property bool canOpenInWindow: compatible && Model.versionAtLeast(version, windowVersion)
   property bool installing: false
+  // The version an install started from the panel waits for: the minimum, or the one the toggle
+  // needs when OMARemote works but is too old for it.
+  property string installWants: minimumVersion
 
   property var connections: []
   property var sessions: []
@@ -59,11 +65,10 @@ Item {
   }
 
   // Shows the connection's running session, or connects it in a tab; starts OMARemote if needed.
-  // Launched through uwsm-app, as Omarchy launches apps, so a newly started OMARemote runs in its
-  // own unit rather than as a child of the shell.
-  function open(connectionId) {
+  // `inWindow` only reaches an OMARemote that understands --window.
+  function open(connectionId, inWindow) {
     if (root.compatible)
-      Quickshell.execDetached(["uwsm-app", "--", "omaremote", "open", connectionId])
+      Quickshell.execDetached(Model.openCommand(connectionId, inWindow === true && root.canOpenInWindow))
   }
 
   // The connection manager itself (a second launch focuses the open window).
@@ -75,6 +80,7 @@ Item {
   // Installs (or updates to) the newest release in a floating Omarchy terminal, where sudo can
   // ask for the password; the version check is repeated until the new one answers.
   function install() {
+    root.installWants = root.compatible ? root.windowVersion : root.minimumVersion
     root.installing = true
     Quickshell.execDetached(["omarchy", "launch", "floating", "terminal", "with", "presentation", Model.installCommand()])
     installPoll.restart()
@@ -86,7 +92,7 @@ Item {
   // The install poll covers an install started from the panel. OMARemote's window appearing is the
   // cue for one done some other way, and for the bars of a replacement bar, which each run their
   // own copy of this service.
-  onAppRunningChanged: if (appRunning && !compatible) refresh()
+  onAppRunningChanged: if (appRunning && !canOpenInWindow) refresh()
 
   // A file watch only attaches to a file that exists, so a connections file that appears later
   // (a fresh install) is read again whenever there is a reason to look.
@@ -103,13 +109,14 @@ Item {
       root.installed = exitCode === 0
       root.version = exitCode === 0 ? Model.parseVersion(versionOutput.text) : ""
       root.checked = true
-      if (root.compatible) {
+      if (root.installing && Model.versionAtLeast(root.version, root.installWants)) {
         root.installing = false
         installPoll.stop()
         installTimeout.stop()
-        if (!pathsProcess.running)
-          pathsProcess.running = true
       }
+      // Not while an update runs: pacman may be halfway through replacing omaremote-session.
+      if (root.compatible && !root.installing && !pathsProcess.running)
+        pathsProcess.running = true
     }
   }
 

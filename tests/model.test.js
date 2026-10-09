@@ -68,11 +68,32 @@ test("favourites exist even when all of them are running", () => {
 test("row and hero text", () => {
   assert.strictEqual(Model.sessionMeta(sessions[0]), "VNC · connected")
   assert.strictEqual(Model.sessionMeta(sessions[2]), "RDP · connecting… · own window")
+  // OMARemote draws own-window sessions itself now: `tab` stays true, `view` says where it is.
+  const base = { protocol: "vnc", state: "connected" }
+  assert.strictEqual(Model.sessionMeta({ ...base, tab: true, view: "window", viewer: 4242 }), "VNC · connected · own window")
+  assert.strictEqual(Model.sessionMeta({ ...base, tab: true, view: "tab", viewer: null }), "VNC · connected")
+  assert.strictEqual(Model.sessionMeta({ ...base, tab: false, view: "window", viewer: null }), "VNC · connected · own window")
   assert.strictEqual(Model.favouriteMeta(connections[1]), "RDP · files.acme.lan")
   assert.strictEqual(Model.summary(false, false, false, 0), "Not installed")
   assert.strictEqual(Model.summary(true, false, false, 0), "Needs a newer OMARemote")
   assert.strictEqual(Model.summary(true, true, true, 2), "2 sessions running")
   assert.strictEqual(Model.summary(true, true, false, 0), "Closed")
+})
+
+test("a click opens in a tab, or with --window in a window of its own", () => {
+  assert.deepStrictEqual(Model.openCommand("pi", false), ["uwsm-app", "--", "omaremote", "open", "pi"])
+  assert.deepStrictEqual(Model.openCommand("pi", true), ["uwsm-app", "--", "omaremote", "open", "--window", "pi"])
+})
+
+test("open in own window is chosen per connection", () => {
+  assert.deepStrictEqual(Model.windowConnections(undefined), [])
+  assert.ok(Model.opensInWindow(["pi"], "pi"))
+  assert.ok(!Model.opensInWindow(["pi"], "dc"))
+  const known = ["pi", "dc"]
+  assert.deepStrictEqual(Model.setOpensInWindow([], "dc", true, known), ["dc"])
+  assert.deepStrictEqual(Model.setOpensInWindow(["pi", "dc"], "pi", false, known), ["dc"])
+  // A connection deleted since is dropped when the list is next written.
+  assert.deepStrictEqual(Model.setOpensInWindow(["gone", "pi"], "dc", true, known), ["pi", "dc"])
 })
 
 test("install command fetches the newest release for this machine", () => {

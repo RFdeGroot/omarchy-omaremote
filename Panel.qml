@@ -17,6 +17,37 @@ Panel {
   property bool cursorActive: false
 
   readonly property bool autoHide: setting("autoHide", false) === true
+
+
+  // The connections that open in a floating window of their own, by id. Kept in this widget's
+  // shell.json entry like its other settings, so the choice survives restarts and the bars on
+  // every monitor share it. Changed here at once; the entry written back sets it again through
+  // onSettingsChanged.
+  property var windowConnections: Model.windowConnections(setting("windowConnections", []))
+  onSettingsChanged: windowConnections = Model.windowConnections(setting("windowConnections", []))
+
+  function connectionOf(row) {
+    return row.kind === "session" ? row.item.connection : row.item.id
+  }
+
+  // Only an OMARemote that understands `open --window` gets the choice.
+  function opensInWindow(connectionId) {
+    return remote.canOpenInWindow && Model.opensInWindow(windowConnections, connectionId)
+  }
+
+  function toggleWindow(index) {
+    var row = rows[index]
+    if (!row || (row.kind !== "session" && row.kind !== "favourite") || !remote.canOpenInWindow) return
+    var id = connectionOf(row)
+    var known = remote.connections.map(function (c) { return c.id })
+      .concat(remote.active.map(function (s) { return s.connection }))
+    windowConnections = Model.setOpensInWindow(windowConnections, id, !Model.opensInWindow(windowConnections, id), known)
+    if (!bar || !bar.shell || typeof bar.shell.updateEntryInline !== "function") return
+    var entry = { id: moduleName }
+    for (var key in settings) if (key !== "id") entry[key] = settings[key]
+    entry.windowConnections = windowConnections
+    bar.shell.updateEntryInline(moduleName, entry)
+  }
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
@@ -28,8 +59,9 @@ Panel {
   // Every row the cursor can land on, top to bottom.
   readonly property var rows: {
     var out = []
-    if (!remote.compatible) out.push({ kind: "install" })
-    else if (!remote.readError) {
+    // Missing or too old: to install it, or (when it works but is older) to update for windows.
+    if (!remote.canOpenInWindow) out.push({ kind: "install" })
+    if (remote.compatible && !remote.readError) {
       remote.active.forEach(function (s) { out.push({ kind: "session", item: s }) })
       remote.favourites.forEach(function (c) { out.push({ kind: "favourite", item: c }) })
     }
@@ -89,13 +121,14 @@ Panel {
       root.close()
       return
     }
-    remote.open(row.kind === "session" ? row.item.connection : row.item.id)
+    remote.open(connectionOf(row), opensInWindow(connectionOf(row)))
     root.close()
   }
 
   onOpenedChanged: if (opened) {
     cursorActive = false
-    cursorIndex = 0
+    // The first session or favourite, also below an update row.
+    cursorIndex = remote.compatible && !remote.canOpenInWindow && rows.length > 1 ? 1 : 0
     pointerGate.reset()
     if (panelFlick) panelFlick.contentY = 0
     remote.refresh()
@@ -122,17 +155,19 @@ Panel {
     readonly property bool checked: false
     readonly property bool installed: false
     readonly property bool compatible: false
+    readonly property bool canOpenInWindow: false
     readonly property bool installing: false
     readonly property bool appRunning: false
     readonly property bool readError: false
     readonly property string version: ""
     readonly property string minimumVersion: ""
+    readonly property string windowVersion: ""
     readonly property var connections: []
     readonly property var active: []
     readonly property var favourites: []
     function refresh() {}
     function listSessions() {}
-    function open(id) {}
+    function open(id, inWindow) {}
     function openApp() {}
     function install() {}
   }
@@ -189,7 +224,8 @@ Panel {
         var key = String(t).toLowerCase()
         if (key === "o") { remote.openApp(); root.close() }
         else if (key === "r") { remote.refresh(); remote.listSessions() }
-        else if (key === "i" && !remote.compatible) root.activate(0)
+        else if (key === "w" && root.cursorActive) root.toggleWindow(root.cursorIndex)
+        else if (key === "i" && !remote.canOpenInWindow) root.activate(0)
       }
 
       Flickable {

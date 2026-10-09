@@ -4,7 +4,8 @@ import qs.Ui
 
 // The dropdown drawn from sample data (no real connections), in the popup card the bar uses, for
 // preview.png. tests/preview.sh renders it offscreen; its second argument picks another state
-// ("missing" for the install row, "error" for a failed session read).
+// ("missing" for the install row, "error" for a failed session read, "old" for an OMARemote too
+// old for own windows).
 Item {
   id: stage
 
@@ -21,12 +22,14 @@ Item {
     property bool installed: !stage.missing
     property bool compatible: !stage.missing
     property bool installing: false
-    property string version: "0.1.3-alpha"
+    property string version: stage.sampleState === "old" ? "0.1.4-alpha" : "0.1.6-alpha"
     property string minimumVersion: "0.1.3-alpha"
+    property string windowVersion: "0.1.6-alpha"
+    property bool canOpenInWindow: !stage.missing && stage.sampleState !== "old"
     property bool appRunning: true
     property bool readError: stage.readError
     property var active: stage.missing ? [] : [
-      { connection: "s-pi", name: "Raspberry Pi", protocol: "vnc", state: "connected", tab: true },
+      { connection: "s-pi", name: "Raspberry Pi", protocol: "vnc", state: "connected", tab: true, view: "window" },
       { connection: "s-files", name: "File Server", protocol: "rdp", state: "connecting", tab: true }
     ]
     property var favourites: stage.missing ? [] : [
@@ -49,7 +52,10 @@ Item {
     property string summary: stage.missing ? "Not installed" : stage.readError ? "Sessions unknown" : "2 sessions running"
     property bool busy: !stage.missing
     property bool cursorActive: !stage.readError
-    property int cursorIndex: stage.missing ? 0 : 2
+    property var windowConnections: ["s-pi", "s-design"]
+    property int cursorIndex: stage.missing ? 0 : stage.sampleState === "old" ? 3 : 2
+    function opensInWindow(id) { return sampleRemote.canOpenInWindow && windowConnections.indexOf(id) !== -1 }
+    function toggleWindow(i) {}
     function rowHasCursor(i) { return cursorActive && cursorIndex === i }
     function pointerMoved(i, item, mouse) {}
     function activate(i) {}

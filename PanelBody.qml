@@ -4,8 +4,8 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// What the dropdown shows: the hero, the install row when OMARemote is missing, and the ACTIVE and
-// FAVOURITES rows. Kept apart from Panel.qml so tests/preview can draw it from sample data; `host`
+// What the dropdown shows: the hero, the install row when OMARemote is missing or too old, and the
+// ACTIVE and FAVOURITES rows, each with a switch for opening it in a window of its own. Kept apart from Panel.qml so tests/preview can draw it from sample data; `host`
 // is the Panel (cursor, colours, actions) and `host.remote` its Service.
 Column {
   id: column
@@ -15,9 +15,19 @@ Column {
 
   // The row the panel's cursor index points at, in the order of host.rows.
   function rowItem(index) {
-    if (!host.remote.compatible) return index === 0 ? installRow : null
+    if (!host.remote.canOpenInWindow && index === 0) return installRow
+    if (!host.remote.compatible) return null
+    var i = index - column.firstRow
     var active = host.remote.active.length
-    return index < active ? activeRows.itemAt(index) : favouriteRows.itemAt(index - active)
+    return i < active ? activeRows.itemAt(i) : favouriteRows.itemAt(i - active)
+  }
+
+  // Sessions and favourites start below the install row, when it shows.
+  readonly property int firstRow: host.remote.canOpenInWindow ? 0 : 1
+
+  // Where a click opens this connection: a tab, or a floating window of its own.
+  function windowHint(connectionId) {
+    return host.opensInWindow(connectionId) ? "Opens in its own window" : "Opens in a tab"
   }
 
   PanelHero {
@@ -47,16 +57,18 @@ Column {
     }
   }
 
-  // Missing or too old: one action, which opens a terminal to install the newest release.
+  // Missing or too old: one action, which opens a terminal to install the newest release. Also
+  // shown for an OMARemote that works but is too old to open sessions in a window of their own.
   ActionRow {
     id: installRow
-    visible: !host.remote.compatible
+    visible: !host.remote.canOpenInWindow
     width: parent.width
     rowIndex: 0
     glyph: "󰇚"
     title: host.remote.installing ? "Installing OMARemote…"
       : host.remote.installed ? "Update OMARemote" : "Install OMARemote"
     subtitle: host.remote.installing ? "Finish in the terminal; this updates by itself"
+      : host.remote.compatible ? "Needs " + host.remote.windowVersion + " for own windows"
       : host.remote.installed ? "This plugin needs " + host.remote.minimumVersion + " or newer (you have " + host.remote.version + ")"
       : "RDP and VNC remote desktops, in tabs"
   }
@@ -89,7 +101,10 @@ Column {
         required property var modelData
         required property int index
         width: parent.width
-        rowIndex: index
+        rowIndex: column.firstRow + index
+        showSwitch: host.remote.canOpenInWindow
+        switchOn: host.opensInWindow(modelData.connection)
+        switchHint: column.windowHint(modelData.connection)
         glyph: ""
         glyphColor: modelData.state === "connected" ? Color.accent : host.dim
         title: modelData.name || modelData.host || ""
@@ -127,7 +142,10 @@ Column {
         required property var modelData
         required property int index
         width: parent.width
-        rowIndex: host.remote.active.length + index
+        rowIndex: column.firstRow + host.remote.active.length + index
+        showSwitch: host.remote.canOpenInWindow
+        switchOn: host.opensInWindow(modelData.id)
+        switchHint: column.windowHint(modelData.id)
         glyph: ""
         glyphColor: host.dim
         title: modelData.name || modelData.host || ""
@@ -144,6 +162,9 @@ Column {
     property color glyphColor: column.host.foreground
     property string title: ""
     property string subtitle: ""
+    property bool showSwitch: false
+    property bool switchOn: false
+    property string switchHint: ""
 
     hasCursor: column.host.rowHasCursor(rowIndex)
     foreground: column.host.foreground
@@ -171,6 +192,9 @@ Column {
         color: actionRow.glyphColor
         font.family: column.host.fontFamily
         font.pixelSize: Style.font.icon
+        // One width for every glyph, so the titles line up whatever the icon.
+        horizontalAlignment: Text.AlignHCenter
+        Layout.preferredWidth: Math.round(Style.font.icon * 1.4)
         Layout.alignment: Qt.AlignVCenter
       }
 
@@ -196,6 +220,25 @@ Column {
           font.family: column.host.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
+        }
+      }
+
+      // Own window or tab for this connection; a click on the rest of the row opens it.
+      ToggleSwitch {
+        id: windowSwitch
+        visible: actionRow.showSwitch
+        checked: actionRow.switchOn
+        cursorRing: false
+        // Compact: one per row, so the names stay what the eye lands on.
+        trackHeight: Math.round(Style.font.body)
+        foreground: column.host.foreground
+        Layout.alignment: Qt.AlignVCenter
+        onToggled: column.host.toggleWindow(actionRow.rowIndex)
+
+        PanelToolTip {
+          visible: windowSwitch.containsMouse
+          text: actionRow.switchHint + "  (w)"
+          fontFamily: column.host.fontFamily
         }
       }
     }
