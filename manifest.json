@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "rfdegroot.omaremote",
   "name": "OMARemote",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "author": "Roelof de Groot",
   "license": "MIT",
-  "description": "Your OMARemote remote desktops in the Omarchy bar: running sessions and favourite connections, one click to bring a session forward or connect. Offers to install OMARemote when it is missing.",
+  "description": "OMARemote, the RDP and VNC remote desktop client, in the Omarchy bar: running sessions and favourite connections, one click to bring a session forward or connect. Offers to install OMARemote when it is missing.",
   "kinds": [
     "bar-widget",
     "service"
