@@ -73,6 +73,11 @@ test("row and hero text", () => {
   assert.strictEqual(Model.sessionMeta({ ...base, tab: true, view: "window", viewer: 4242 }), "VNC · connected · own window")
   assert.strictEqual(Model.sessionMeta({ ...base, tab: true, view: "tab", viewer: null }), "VNC · connected")
   assert.strictEqual(Model.sessionMeta({ ...base, tab: false, view: "window", viewer: null }), "VNC · connected · own window")
+  assert.strictEqual(Model.sessionMeta({ protocol: "ssh", state: "connected", tab: true, view: "tab" }), "SSH · connected")
+  // SSH gets a terminal, as in OMARemote; anything else (or nothing) the monitor.
+  assert.strictEqual(Model.sessionGlyph({ protocol: "ssh" }), "")
+  assert.strictEqual(Model.sessionGlyph({ protocol: "vnc" }), "")
+  assert.strictEqual(Model.sessionGlyph({}), "")
   assert.strictEqual(Model.favouriteMeta(connections[1]), "RDP · files.acme.lan")
   assert.strictEqual(Model.summary(false, false, false, 0), "Not installed")
   assert.strictEqual(Model.summary(true, false, false, 0), "Needs a newer OMARemote")

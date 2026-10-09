@@ -30,7 +30,8 @@ Item {
     property bool readError: stage.readError
     property var active: stage.missing ? [] : [
       { connection: "s-pi", name: "Raspberry Pi", protocol: "vnc", state: "connected", tab: true, view: "window" },
-      { connection: "s-files", name: "File Server", protocol: "rdp", state: "connecting", tab: true }
+      { connection: "s-files", name: "File Server", protocol: "rdp", state: "connecting", tab: true },
+      { connection: "s-git", name: "Git Server", protocol: "ssh", state: "connected", tab: true, view: "tab" }
     ]
     property var favourites: stage.missing ? [] : [
       { id: "s-build", name: "Build Server", protocol: "rdp", host: "build01.acme.lan" },
@@ -49,7 +50,7 @@ Item {
     property color foreground: Color.foreground
     property color dim: Qt.darker(Color.foreground, 1.55)
     property string fontFamily: Style.font.family
-    property string summary: stage.missing ? "Not installed" : stage.readError ? "Sessions unknown" : "2 sessions running"
+    property string summary: stage.missing ? "Not installed" : stage.readError ? "Sessions unknown" : "3 sessions running"
     property bool busy: !stage.missing
     property bool cursorActive: !stage.readError
     property var windowConnections: ["s-pi", "s-design"]

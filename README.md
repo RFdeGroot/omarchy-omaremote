@@ -1,6 +1,7 @@
 # OMARemote for the Omarchy bar
 
-Your [OMARemote](https://github.com/RFdeGroot/OMARemote) remote desktops in the Omarchy bar.
+Your [OMARemote](https://github.com/RFdeGroot/OMARemote) remote desktops (RDP, VNC) and SSH
+sessions in the Omarchy bar.
 Running sessions and favourite connections are one click away: click a running session to bring
 it forward, click a favourite to connect it in a tab. OMARemote starts when it is not open yet.
 

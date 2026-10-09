@@ -130,6 +130,11 @@ function openCommand(connectionId, inWindow) {
   return ["uwsm-app", "--", "omaremote", "open"].concat(inWindow ? ["--window"] : [], [String(connectionId)])
 }
 
+// The glyph for a running session, as OMARemote shows it: a terminal for SSH, a monitor otherwise.
+function sessionGlyph(session) {
+  return String((session && session.protocol) || "").toLowerCase() === "ssh" ? "\uf120" : "\uf108"
+}
+
 function sessionMeta(session) {
   var state = session.state === "connecting" ? "connecting…" : "connected"
   return protocolLabel(session) + " · " + state + (inOwnWindow(session) ? " · own window" : "")
@@ -170,7 +175,7 @@ if (typeof module !== "undefined")
     parseVersion: parseVersion, compareVersions: compareVersions, versionAtLeast: versionAtLeast,
     isActive: isActive, activeSessions: activeSessions, favourites: favourites,
     parseConnections: parseConnections, hasFavourites: hasFavourites, parseSessions: parseSessions,
-    sessionMeta: sessionMeta, favouriteMeta: favouriteMeta, summary: summary,
+    sessionGlyph: sessionGlyph, sessionMeta: sessionMeta, favouriteMeta: favouriteMeta, summary: summary,
     installCommand: installCommand, openCommand: openCommand,
     windowConnections: windowConnections, opensInWindow: opensInWindow, setOpensInWindow: setOpensInWindow
   }

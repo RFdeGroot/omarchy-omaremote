@@ -70,7 +70,7 @@ Column {
     subtitle: host.remote.installing ? "Finish in the terminal; this updates by itself"
       : host.remote.compatible ? "Needs " + host.remote.windowVersion + " for own windows"
       : host.remote.installed ? "This plugin needs " + host.remote.minimumVersion + " or newer (you have " + host.remote.version + ")"
-      : "RDP and VNC remote desktops, in tabs"
+      : "Remote desktops (RDP, VNC) and SSH, in tabs"
   }
 
   // omaremote-session failed: say so rather than show an empty or stale list as if it were true.
@@ -105,7 +105,7 @@ Column {
         showSwitch: host.remote.canOpenInWindow
         switchOn: host.opensInWindow(modelData.connection)
         switchHint: column.windowHint(modelData.connection)
-        glyph: ""
+        glyph: Model.sessionGlyph(modelData)
         glyphColor: modelData.state === "connected" ? Color.accent : host.dim
         title: modelData.name || modelData.host || ""
         subtitle: Model.sessionMeta(modelData)
