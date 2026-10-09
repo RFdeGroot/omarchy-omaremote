@@ -19,6 +19,19 @@ downloads the newest release for your machine (Intel/AMD or Apple Silicon) and i
 pacman, which also installs everything it needs. The same button updates an OMARemote that is too
 old for this plugin (it needs 0.1.3-alpha or newer).
 
+The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `sudo` and `pacman`,
+which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the
+terminal it opens.
+
+## Remove
+
+```bash
+omarchy plugin remove rfdegroot.omaremote
+```
+
+This removes the bar icon only. OMARemote itself stays; remove it with `sudo pacman -R omaremote`
+if you no longer want it.
+
 ## Use
 
 - **Active**: sessions that are connecting or connected. Click one to bring it forward.

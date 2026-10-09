@@ -17,6 +17,18 @@ A change that needs something from OMARemote, or a contract that turns out wrong
 to the OMARemote side first. Raise `minimumVersion` (in `manifest.json` and `Service.qml`) when the
 plugin starts relying on something newer.
 
+The same file's last section lists what OMARemote relies on from the plugin: its sidebar offers to
+install or update the plugin. So keep the id `rfdegroot.omaremote`, keep `manifest.json` `version`
+equal to the released version (no `v`), tag every release `v<version>` with a GitHub release, and
+keep the plugin installable with `omarchy plugin add … --enable` and updatable with
+`omarchy plugin update rfdegroot.omaremote`.
+
+## Branches
+
+`main` only moves at a release. `omarchy plugin add` and `omarchy plugin update` take `main`'s
+latest commit, so whatever lands on `main` reaches every user who updates. Work on `dev`, and
+fast-forward `main` to `dev` only when releasing.
+
 ## Validation
 
 Before committing a change, run:
@@ -38,10 +50,15 @@ answer instead of the installed one.
 ## Release process
 
 1. Use the next semantic version. Never move or replace a published tag.
-2. Update the version in `manifest.json` and commit all release changes on `main`.
+2. On `dev`: update the version in `manifest.json` and commit it with any other release changes.
 3. Run the validation commands above.
-4. Push `main`, tag the exact release commit as `v<version>`, push the tag, and create the GitHub
-   release.
-5. Only when the maintainer decides to publish: open a verification issue in
-   `omacom/omarchy-plugin-marketplace` with the "Verify and publish a newer upstream commit" form,
-   headings unchanged, targeting the full 40-character release commit SHA.
+4. Fast-forward `main` to `dev` (`git switch main && git merge --ff-only dev`); `main` never gets
+   commits of its own.
+5. Push `main` and `dev`, tag the exact release commit as `v<version>`, push the tag, and create
+   the GitHub release.
+6. Only when the maintainer decides to publish, in `omacom/omarchy-plugin-marketplace`
+   (`SUBMISSION.md` there has the exact formats; show the issue to the maintainer before opening
+   it): the first listing is a "[Plugin]: OMARemote" submission issue; later releases are a
+   verification issue with the "Verify and publish a newer upstream commit" action, headings
+   unchanged, targeting the full 40-character release commit SHA. Either way `main` must point at
+   that commit: the marketplace validates the repository's current head.
