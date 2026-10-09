@@ -223,20 +223,41 @@ Column {
         }
       }
 
-      // Own window or tab for this connection; a click on the rest of the row opens it.
-      ToggleSwitch {
-        id: windowSwitch
+      // Own window or tab for this connection; a click on the rest of the row opens it. The click
+      // zone is the full row height and reaches past the compact switch to the row's right edge:
+      // the switch alone is too small a target, and a near miss would open the session instead.
+      Item {
+        id: windowZone
         visible: actionRow.showSwitch
-        checked: actionRow.switchOn
-        cursorRing: false
-        // Compact: one per row, so the names stay what the eye lands on.
-        trackHeight: Math.round(Style.font.body)
-        foreground: column.host.foreground
+        Layout.fillHeight: true
         Layout.alignment: Qt.AlignVCenter
-        onToggled: column.host.toggleWindow(actionRow.rowIndex)
+        implicitWidth: windowSwitch.implicitWidth + Style.space(16)
+
+        ToggleSwitch {
+          id: windowSwitch
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          checked: actionRow.switchOn
+          interactive: false
+          cursorRing: false
+          // Compact: one per row, so the names stay what the eye lands on.
+          trackHeight: Math.round(Style.font.body)
+          foreground: column.host.foreground
+        }
+
+        MouseArea {
+          id: windowZoneMouse
+          anchors.fill: parent
+          anchors.topMargin: -Style.spacing.rowPaddingX / 2
+          anchors.bottomMargin: -Style.spacing.rowPaddingX / 2
+          anchors.rightMargin: -Style.space(10)
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: column.host.toggleWindow(actionRow.rowIndex)
+        }
 
         PanelToolTip {
-          visible: windowSwitch.containsMouse
+          visible: windowZoneMouse.containsMouse
           text: actionRow.switchHint + "  (w)"
           fontFamily: column.host.fontFamily
         }
