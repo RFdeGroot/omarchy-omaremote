@@ -166,7 +166,9 @@ function shellQuote(s) {
 // OMARemote's release key and that this system's Qt is new enough for it, and installs it with
 // pacman, then starts OMARemote through uwsm-app, as the panel does. Run in a terminal, so sudo
 // can ask for the password. Release files on GitHub can be replaced after publishing, so nothing
-// reaches sudo unless the key in `keyring` signed it.
+// reaches sudo unless the key in `keyring` signed it. The signature is saved under a name pacman
+// does not look for: with `<package>.sig` beside it, pacman -U checks that too, against its own
+// keyring, which lacks OMARemote's key, and refuses the package.
 // The subshell keeps `set -e` and `exit` away from the terminal's wrapper script, which would
 // otherwise close the window before a failure can be read.
 function installCommand(keyring, fingerprint) {
@@ -177,8 +179,8 @@ function installCommand(keyring, fingerprint) {
     "[ -n \"$url\" ] || { echo \"Could not find an OMARemote release for $(uname -m) on GitHub.\"; exit 1; }; " +
     "dir=$(mktemp -d); trap 'rm -rf \"$dir\"' EXIT; pkg=\"$dir/${url##*/}\"; " +
     "curl -fL -o \"$pkg\" \"$url\"; " +
-    "curl -fL -o \"$pkg.sig\" \"$url.sig\" || { echo \"The release has no signature, so it is not installed.\"; exit 1; }; " +
-    "gpgv --status-fd 1 --keyring " + shellQuote(keyring) + " \"$pkg.sig\" \"$pkg\" 2>/dev/null" +
+    "curl -fL -o \"$dir/signature\" \"$url.sig\" || { echo \"The release has no signature, so it is not installed.\"; exit 1; }; " +
+    "gpgv --status-fd 1 --keyring " + shellQuote(keyring) + " \"$dir/signature\" \"$pkg\" 2>/dev/null" +
     " | grep -q \"^\\[GNUPG:\\] VALIDSIG " + (fingerprint || RELEASE_KEY) + " \"" +
     " || { echo \"The download is not signed by OMARemote's release key, so it is not installed.\"; exit 1; }; " +
     // OMARemote's tab renderer only loads on the Qt it was built against or newer, and Arch Linux

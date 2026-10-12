@@ -13,9 +13,10 @@ Item {
   id: root
 
   // 0.4.2 keeps connection names, hosts and errors off command lines, which other accounts can
-  // read, its notifications included (Omarchy's notification service hands their text to a shell).
-  // With anything older the panel lists and connects nothing and offers the update instead.
-  property string minimumVersion: "0.4.2"
+  // read, its notifications included (Omarchy's notification service hands their text to a shell);
+  // 0.4.3's own updater works again. With anything older the panel lists and connects nothing and
+  // offers the update instead.
+  property string minimumVersion: "0.4.3"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 

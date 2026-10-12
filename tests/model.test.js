@@ -177,7 +177,8 @@ function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint, 
       'if [[ -z $out ]]; then cat "$WORK/releases.json"; exit; fi\n' +
       'url=${@: -1}; src="$WORK/served/${url##*/}"; [[ -f $src ]] || exit 22; cp "$src" "$out"')
     stub("uname", "echo x86_64")
-    stub("sudo", 'echo "sudo $*" >> "$LOG"; [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"')
+    stub("sudo", 'echo "sudo $*" >> "$LOG"; [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"\n' +
+      '[[ -e ${@: -1}.sig ]] && echo "signature beside the package" >> "$LOG"; true')
     stub("setsid", 'echo "setsid $*" >> "$LOG"')
     stub("pacman", '[[ $* == "-Q qt6-base" && -n $QT ]] && echo "qt6-base $QT"')
     const log = path.join(work, "log")
@@ -205,8 +206,10 @@ const pkg = "omaremote-0.4.0-1-x86_64.pkg.tar.zst"
 test("install command: downloads this machine's package, checks it, installs it, cleans up", () => {
   const r = runInstall(release, { [pkg]: { signed: "pkg" } })
   assert.match(r.log, /curl -fL -o \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\n/)
-  assert.match(r.log, /curl -fL -o \S+\.pkg\.tar\.zst\.sig https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\.sig\n/)
-  assert.match(r.log, /sudo pacman -U \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\npackage present/)
+  assert.match(r.log, /curl -fL -o \S+\/signature https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\.sig\n/)
+  assert.match(r.log, /sudo pacman -U \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\npackage present\n/)
+  // pacman -U would check a <package>.sig against its own keyring, which lacks OMARemote's key.
+  assert.doesNotMatch(r.log, /signature beside the package/)
   assert.match(r.log, /setsid -f uwsm-app -- omaremote/)
   assert.match(r.stdout, /after 0/)
   assert.deepStrictEqual(r.left, [])
