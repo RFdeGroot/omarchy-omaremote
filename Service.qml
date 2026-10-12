@@ -12,7 +12,9 @@ import "Model.js" as Model
 Item {
   id: root
 
-  property string minimumVersion: "0.1.3-alpha"
+  // 0.4.1 keeps connection names, hosts and errors off command lines, which other accounts can
+  // read. With anything older the panel lists and connects nothing and offers the update instead.
+  property string minimumVersion: "0.4.1"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 

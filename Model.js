@@ -163,9 +163,10 @@ function shellQuote(s) {
 }
 
 // Downloads the newest release for this machine (alphas included), checks its signature against
-// OMARemote's release key and installs it with pacman, then starts OMARemote through uwsm-app, as
-// the panel does. Run in a terminal, so sudo can ask for the password. Release files on GitHub can
-// be replaced after publishing, so nothing reaches sudo unless the key in `keyring` signed it.
+// OMARemote's release key and that this system's Qt is new enough for it, and installs it with
+// pacman, then starts OMARemote through uwsm-app, as the panel does. Run in a terminal, so sudo
+// can ask for the password. Release files on GitHub can be replaced after publishing, so nothing
+// reaches sudo unless the key in `keyring` signed it.
 // The subshell keeps `set -e` and `exit` away from the terminal's wrapper script, which would
 // otherwise close the window before a failure can be read.
 function installCommand(keyring, fingerprint) {
@@ -180,6 +181,15 @@ function installCommand(keyring, fingerprint) {
     "gpgv --status-fd 1 --keyring " + shellQuote(keyring) + " \"$pkg.sig\" \"$pkg\" 2>/dev/null" +
     " | grep -q \"^\\[GNUPG:\\] VALIDSIG " + (fingerprint || RELEASE_KEY) + " \"" +
     " || { echo \"The download is not signed by OMARemote's release key, so it is not installed.\"; exit 1; }; " +
+    // OMARemote's tab renderer only loads on the Qt it was built against or newer, and Arch Linux
+    // ARM can be ahead of this system. Pulling in the newer Qt would be a partial upgrade, so the
+    // system update comes first. Either version unreadable: no reason to refuse.
+    "built=$(bsdtar -xOf \"$pkg\" .BUILDINFO 2>/dev/null" +
+    " | sed -n 's/^installed = qt6-base-\\([0-9]*\\.[0-9]*\\)\\..*/\\1/p'); " +
+    "have=$(pacman -Q qt6-base 2>/dev/null | awk '{ split($2, v, \".\"); print v[1] \".\" v[2] }'); " +
+    "if [ -n \"$built\" ] && [ -n \"$have\" ] && [ \"$(vercmp \"$built\" \"$have\")\" -gt 0 ]; then " +
+    "echo \"This OMARemote needs Qt $built; this system has Qt $have.\"; " +
+    "echo \"Update the system first (omarchy update), then install OMARemote again.\"; exit 1; fi; " +
     "sudo pacman -U \"$pkg\"; " +
     "setsid -f uwsm-app -- omaremote >/dev/null 2>&1)"
 }

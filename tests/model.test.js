@@ -145,8 +145,9 @@ test.after(() => {
 // Runs the command the way omarchy-launch-floating-terminal-with-presentation does (inside a
 // larger bash -c script), with curl, sudo and setsid replaced by stubs that log what they get.
 // The curl stub serves the release list and the files in `files` (name -> contents, or
-// { signed: contents } for a package with a valid signature beside it).
-function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint) {
+// { signed: contents } for a package with a valid signature beside it, { qt: "6.12.0-1" } for a
+// signed package built against that Qt). The pacman stub reports this system's Qt as `systemQt`.
+function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint, systemQt = "6.11.1-1") {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-install-test-"))
   try {
     const bin = path.join(work, "bin"), served = path.join(work, "served")
@@ -155,7 +156,14 @@ function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint) 
     fs.writeFileSync(path.join(work, "releases.json"), releasesJson)
     for (const [name, contents] of Object.entries(files)) {
       const file = path.join(served, name)
-      if (typeof contents === "object") {
+      if (typeof contents === "object" && contents.qt) {
+        const info = fs.mkdtempSync(path.join(work, "buildinfo-"))
+        fs.writeFileSync(path.join(info, ".BUILDINFO"),
+          "format = 2\npkgname = omaremote\ninstalled = qt6-base-" + contents.qt + "-x86_64\n")
+        spawnSync("bsdtar", ["--zstd", "-cf", file, "-C", info, ".BUILDINFO"])
+        fs.rmSync(info, { recursive: true })
+        signer.sign(file)
+      } else if (typeof contents === "object") {
         fs.writeFileSync(file, contents.signed)
         signer.sign(file)
         if (contents.then !== undefined) fs.writeFileSync(file, contents.then)
@@ -171,11 +179,12 @@ function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint) 
     stub("uname", "echo x86_64")
     stub("sudo", 'echo "sudo $*" >> "$LOG"; [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"')
     stub("setsid", 'echo "setsid $*" >> "$LOG"')
+    stub("pacman", '[[ $* == "-Q qt6-base" && -n $QT ]] && echo "qt6-base $QT"')
     const log = path.join(work, "log")
     const script = "echo before; " + Model.installCommand(signer.keyring, fingerprint) + "; echo \"after $?\""
     const r = spawnSync("bash", ["-c", script], {
       encoding: "utf8",
-      env: { PATH: bin + ":" + process.env.PATH, LOG: log, WORK: work, TMPDIR: work, HOME: work }
+      env: { PATH: bin + ":" + process.env.PATH, LOG: log, WORK: work, TMPDIR: work, HOME: work, QT: systemQt }
     })
     const left = fs.readdirSync(work).filter(n => n.startsWith("tmp."))
     return { stdout: r.stdout, log: fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "", left }
@@ -220,6 +229,20 @@ test("install command: a package without a signature is not installed", () => {
   const r = runInstall(release, { [pkg]: "pkg" })
   assert.match(r.stdout, /The release has no signature, so it is not installed\.\nafter 1\n$/)
   assert.doesNotMatch(r.log, /sudo/)
+})
+
+test("install command: a package built against a newer Qt waits for the system update", () => {
+  const r = runInstall(release, { [pkg]: { qt: "6.12.0-1" } })
+  assert.match(r.stdout, /This OMARemote needs Qt 6\.12; this system has Qt 6\.11\.\nUpdate the system first \(omarchy update\), then install OMARemote again\.\nafter 1\n$/)
+  assert.doesNotMatch(r.log, /sudo/)
+  assert.deepStrictEqual(r.left, [])
+})
+
+test("install command: the same or an older Qt minor installs; an unreadable one does not block", () => {
+  for (const qt of ["6.11.3-2", "6.10.0-1"])
+    assert.match(runInstall(release, { [pkg]: { qt } }).log, /sudo pacman -U/, qt)
+  assert.match(runInstall(release, { [pkg]: { qt: "6.12.0-1" } }, undefined, "6.12.0-1").log, /sudo pacman -U/)
+  assert.match(runInstall(release, { [pkg]: { qt: "6.12.0-1" } }, undefined, "").log, /sudo pacman -U/)
 })
 
 test("install command: a failure ends the install, not the terminal's script", () => {
