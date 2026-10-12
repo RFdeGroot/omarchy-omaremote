@@ -154,19 +154,33 @@ function summary(installed, compatible, appRunning, activeCount, readError) {
   return appRunning ? "No sessions running" : "Closed"
 }
 
-// Downloads the newest release for this machine (alphas included) and installs it with pacman,
-// then starts OMARemote through uwsm-app, as the panel does. Run in a terminal, so sudo can ask
-// for the password. The subshell keeps `set -e` and `exit` away from the terminal's wrapper
-// script, which would otherwise close the window before a failure can be read.
-function installCommand() {
+// OMARemote's release key (docs/plugin-interface.md in OMARemote); its public half is the keyring
+// omaremote-release.gpg beside this file. A key rotation is announced there first.
+var RELEASE_KEY = "D7FC432CF643656A400BDDEB3BE7753BBB50B393"
+
+function shellQuote(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'"
+}
+
+// Downloads the newest release for this machine (alphas included), checks its signature against
+// OMARemote's release key and installs it with pacman, then starts OMARemote through uwsm-app, as
+// the panel does. Run in a terminal, so sudo can ask for the password. Release files on GitHub can
+// be replaced after publishing, so nothing reaches sudo unless the key in `keyring` signed it.
+// The subshell keeps `set -e` and `exit` away from the terminal's wrapper script, which would
+// otherwise close the window before a failure can be read.
+function installCommand(keyring, fingerprint) {
   return "(set -e; " +
     "url=$(curl -fsSL https://api.github.com/repos/" + REPOSITORY + "/releases" +
     " | grep -o \"https://[^\\\"]*/omaremote-[0-9][^/\\\"]*-$(uname -m)\\.pkg\\.tar\\.zst\\\"\"" +
     " | head -1 | tr -d '\"'); " +
     "[ -n \"$url\" ] || { echo \"Could not find an OMARemote release for $(uname -m) on GitHub.\"; exit 1; }; " +
-    "dir=$(mktemp -d); trap 'rm -rf \"$dir\"' EXIT; " +
-    "curl -fL -o \"$dir/${url##*/}\" \"$url\"; " +
-    "sudo pacman -U \"$dir/${url##*/}\"; " +
+    "dir=$(mktemp -d); trap 'rm -rf \"$dir\"' EXIT; pkg=\"$dir/${url##*/}\"; " +
+    "curl -fL -o \"$pkg\" \"$url\"; " +
+    "curl -fL -o \"$pkg.sig\" \"$url.sig\" || { echo \"The release has no signature, so it is not installed.\"; exit 1; }; " +
+    "gpgv --status-fd 1 --keyring " + shellQuote(keyring) + " \"$pkg.sig\" \"$pkg\" 2>/dev/null" +
+    " | grep -q \"^\\[GNUPG:\\] VALIDSIG " + (fingerprint || RELEASE_KEY) + " \"" +
+    " || { echo \"The download is not signed by OMARemote's release key, so it is not installed.\"; exit 1; }; " +
+    "sudo pacman -U \"$pkg\"; " +
     "setsid -f uwsm-app -- omaremote >/dev/null 2>&1)"
 }
 
@@ -176,6 +190,6 @@ if (typeof module !== "undefined")
     isActive: isActive, activeSessions: activeSessions, favourites: favourites,
     parseConnections: parseConnections, hasFavourites: hasFavourites, parseSessions: parseSessions,
     sessionGlyph: sessionGlyph, sessionMeta: sessionMeta, favouriteMeta: favouriteMeta, summary: summary,
-    installCommand: installCommand, openCommand: openCommand,
+    RELEASE_KEY: RELEASE_KEY, installCommand: installCommand, openCommand: openCommand,
     windowConnections: windowConnections, opensInWindow: opensInWindow, setOpensInWindow: setOpensInWindow
   }

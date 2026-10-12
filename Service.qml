@@ -82,7 +82,8 @@ Item {
   function install() {
     root.installWants = root.compatible ? root.windowVersion : root.minimumVersion
     root.installing = true
-    Quickshell.execDetached(["omarchy", "launch", "floating", "terminal", "with", "presentation", Model.installCommand()])
+    var keyring = decodeURIComponent(Qt.resolvedUrl("omaremote-release.gpg").toString().replace(/^file:\/\//, ""))
+    Quickshell.execDetached(["omarchy", "launch", "floating", "terminal", "with", "presentation", Model.installCommand(keyring)])
     installPoll.restart()
     installTimeout.restart()
   }

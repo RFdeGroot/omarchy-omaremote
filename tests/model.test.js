@@ -102,34 +102,80 @@ test("open in own window is chosen per connection", () => {
 })
 
 test("install command fetches the newest release for this machine", () => {
-  const cmd = Model.installCommand()
+  const cmd = Model.installCommand("/plugin/omaremote-release.gpg")
   assert.match(cmd, /api\.github\.com\/repos\/RFdeGroot\/OMARemote\/releases/)
   assert.match(cmd, /\$\(uname -m\)/)
   assert.match(cmd, /sudo pacman -U/)
+  assert.match(cmd, /--keyring '\/plugin\/omaremote-release\.gpg'/)
+  assert.ok(cmd.includes("VALIDSIG " + Model.RELEASE_KEY + " "))
+  assert.match(Model.installCommand("/it's here/k.gpg"), /--keyring '\/it'\\''s here\/k\.gpg'/)
+})
+
+const fs = require("node:fs"), os = require("node:os"), path = require("node:path")
+const { spawnSync } = require("node:child_process")
+
+test("the bundled keyring holds OMARemote's release key", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-key-test-"))
+  try {
+    const r = spawnSync("gpg", ["--homedir", home, "--batch", "--with-colons", "--show-keys",
+      path.join(__dirname, "..", "omaremote-release.gpg")], { encoding: "utf8" })
+    const fingerprints = r.stdout.split("\n").filter(l => l.startsWith("fpr:")).map(l => l.split(":")[9])
+    assert.deepStrictEqual(fingerprints, [Model.RELEASE_KEY])
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+// A throwaway signing key, standing in for OMARemote's: the real gpgv checks the test downloads.
+const signer = (() => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-signer-test-"))
+  const gpg = args => spawnSync("gpg", ["--homedir", home, "--batch", "--quiet", ...args], { encoding: "utf8" })
+  gpg(["--passphrase", "", "--quick-gen-key", "Test releases <test@acme.lan>", "ed25519", "sign", "never"])
+  const fingerprint = gpg(["--with-colons", "--list-keys"]).stdout.split("\n").find(l => l.startsWith("fpr:")).split(":")[9]
+  const keyring = path.join(home, "release.gpg")
+  gpg(["--output", keyring, "--export", fingerprint])
+  const sign = (file) => gpg(["--yes", "--detach-sign", "--output", file + ".sig", file])
+  return { home, fingerprint, keyring, sign }
+})()
+test.after(() => {
+  spawnSync("gpgconf", ["--homedir", signer.home, "--kill", "all"])
+  fs.rmSync(signer.home, { recursive: true, force: true })
 })
 
 // Runs the command the way omarchy-launch-floating-terminal-with-presentation does (inside a
 // larger bash -c script), with curl, sudo and setsid replaced by stubs that log what they get.
-function runInstall(releasesJson) {
-  const fs = require("node:fs"), os = require("node:os"), path = require("node:path")
-  const { spawnSync } = require("node:child_process")
+// The curl stub serves the release list and the files in `files` (name -> contents, or
+// { signed: contents } for a package with a valid signature beside it).
+function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-install-test-"))
   try {
-    const bin = path.join(work, "bin")
+    const bin = path.join(work, "bin"), served = path.join(work, "served")
     fs.mkdirSync(bin)
+    fs.mkdirSync(served)
     fs.writeFileSync(path.join(work, "releases.json"), releasesJson)
+    for (const [name, contents] of Object.entries(files)) {
+      const file = path.join(served, name)
+      if (typeof contents === "object") {
+        fs.writeFileSync(file, contents.signed)
+        signer.sign(file)
+        if (contents.then !== undefined) fs.writeFileSync(file, contents.then)
+      } else {
+        fs.writeFileSync(file, contents)
+      }
+    }
     const stub = (name, body) => fs.writeFileSync(path.join(bin, name), "#!/bin/bash\n" + body + "\n", { mode: 0o755 })
     stub("curl", 'echo "curl $*" >> "$LOG"\n' +
       'out=; prev=; for a in "$@"; do [[ $prev == -o ]] && out=$a; prev=$a; done\n' +
-      'if [[ -n $out ]]; then echo pkg > "$out"; else cat "$WORK/releases.json"; fi')
+      'if [[ -z $out ]]; then cat "$WORK/releases.json"; exit; fi\n' +
+      'url=${@: -1}; src="$WORK/served/${url##*/}"; [[ -f $src ]] || exit 22; cp "$src" "$out"')
     stub("uname", "echo x86_64")
     stub("sudo", 'echo "sudo $*" >> "$LOG"; [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"')
     stub("setsid", 'echo "setsid $*" >> "$LOG"')
     const log = path.join(work, "log")
-    const script = "echo before; " + Model.installCommand() + "; echo \"after $?\""
+    const script = "echo before; " + Model.installCommand(signer.keyring, fingerprint) + "; echo \"after $?\""
     const r = spawnSync("bash", ["-c", script], {
       encoding: "utf8",
-      env: { PATH: bin + ":" + process.env.PATH, LOG: log, WORK: work, TMPDIR: work }
+      env: { PATH: bin + ":" + process.env.PATH, LOG: log, WORK: work, TMPDIR: work, HOME: work }
     })
     const left = fs.readdirSync(work).filter(n => n.startsWith("tmp."))
     return { stdout: r.stdout, log: fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "", left }
@@ -138,19 +184,42 @@ function runInstall(releasesJson) {
   }
 }
 
-test("install command: downloads this machine's package, installs it, cleans up", () => {
-  const base = "https://github.com/RFdeGroot/OMARemote/releases/download/v0.2.0"
-  const r = runInstall(JSON.stringify([{ assets: [
-    { browser_download_url: base + "/omaremote-debug-0.2.0-1-x86_64.pkg.tar.zst" },
-    { browser_download_url: base + "/omaremote-0.2.0-1-aarch64.pkg.tar.zst" },
-    { browser_download_url: base + "/omaremote-0.2.0-1-x86_64.pkg.tar.zst.sig" },
-    { browser_download_url: base + "/omaremote-0.2.0-1-x86_64.pkg.tar.zst" }
-  ] }]))
-  assert.match(r.log, /curl -fL -o \S+\/omaremote-0\.2\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.2\.0-1-x86_64\.pkg\.tar\.zst\n/)
-  assert.match(r.log, /sudo pacman -U \S+\/omaremote-0\.2\.0-1-x86_64\.pkg\.tar\.zst\npackage present/)
+const base = "https://github.com/RFdeGroot/OMARemote/releases/download/v0.4.0"
+const release = JSON.stringify([{ assets: [
+  { browser_download_url: base + "/omaremote-debug-0.4.0-1-x86_64.pkg.tar.zst" },
+  { browser_download_url: base + "/omaremote-0.4.0-1-aarch64.pkg.tar.zst" },
+  { browser_download_url: base + "/omaremote-0.4.0-1-x86_64.pkg.tar.zst.sig" },
+  { browser_download_url: base + "/omaremote-0.4.0-1-x86_64.pkg.tar.zst" }
+] }])
+const pkg = "omaremote-0.4.0-1-x86_64.pkg.tar.zst"
+
+test("install command: downloads this machine's package, checks it, installs it, cleans up", () => {
+  const r = runInstall(release, { [pkg]: { signed: "pkg" } })
+  assert.match(r.log, /curl -fL -o \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\n/)
+  assert.match(r.log, /curl -fL -o \S+\.pkg\.tar\.zst\.sig https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\.sig\n/)
+  assert.match(r.log, /sudo pacman -U \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\npackage present/)
   assert.match(r.log, /setsid -f uwsm-app -- omaremote/)
   assert.match(r.stdout, /after 0/)
   assert.deepStrictEqual(r.left, [])
+})
+
+test("install command: a package changed after signing is not installed", () => {
+  const r = runInstall(release, { [pkg]: { signed: "pkg", then: "replaced pkg" } })
+  assert.match(r.stdout, /^before\nThe download is not signed by OMARemote's release key, so it is not installed\.\nafter 1\n$/)
+  assert.doesNotMatch(r.log, /sudo/)
+  assert.deepStrictEqual(r.left, [])
+})
+
+test("install command: a package signed by another key is not installed", () => {
+  const r = runInstall(release, { [pkg]: { signed: "pkg" } }, Model.RELEASE_KEY)
+  assert.match(r.stdout, /The download is not signed by OMARemote's release key, so it is not installed\.\nafter 1\n$/)
+  assert.doesNotMatch(r.log, /sudo/)
+})
+
+test("install command: a package without a signature is not installed", () => {
+  const r = runInstall(release, { [pkg]: "pkg" })
+  assert.match(r.stdout, /The release has no signature, so it is not installed\.\nafter 1\n$/)
+  assert.doesNotMatch(r.log, /sudo/)
 })
 
 test("install command: a failure ends the install, not the terminal's script", () => {

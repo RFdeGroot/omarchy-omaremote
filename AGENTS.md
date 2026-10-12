@@ -23,6 +23,11 @@ equal to the released version (no `v`), tag every release `v<version>` with a Gi
 keep the plugin installable with `omarchy plugin add … --enable` and updatable with
 `omarchy plugin update rfdegroot.omaremote`.
 
+`omaremote-release.gpg` is a copy of OMARemote's `packaging/arch/omaremote-release.gpg`, and
+`RELEASE_KEY` in `Model.js` its fingerprint, as the contract gives them. The install button
+installs nothing that key did not sign. A key rotation is announced to the plugin first (see the
+contract); update both together, in a release, before OMARemote signs with the new key.
+
 ## Branches
 
 `main` only moves at a release. `omarchy plugin add` and `omarchy plugin update` take `main`'s

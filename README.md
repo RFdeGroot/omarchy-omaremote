@@ -16,12 +16,13 @@ omarchy plugin add https://github.com/RFdeGroot/omarchy-omaremote.git --enable
 Then place it in the bar from Omarchy's bar settings, if it did not ask where.
 
 Without OMARemote the panel offers to install it: *Install OMARemote* opens a terminal that
-downloads the newest release for your machine (Intel/AMD or Apple Silicon) and installs it with
-pacman, which also installs everything it needs. The same button updates an OMARemote that is too
+downloads the newest release for your machine (Intel/AMD or Apple Silicon), checks that
+OMARemote's release key signed it, and installs it with pacman, which also installs everything it
+needs. A download without that signature is not installed. The same button updates an OMARemote that is too
 old for this plugin (it needs 0.1.3-alpha or newer).
 
-The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `sudo` and `pacman`,
-which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the
+The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `gpgv`, `sudo` and
+`pacman`, which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the
 terminal it opens.
 
 ## Remove
@@ -73,7 +74,9 @@ The plugin reads what OMARemote reports and does not keep state of its own:
   are watched for changes rather than polled;
 - a click runs `omaremote open <connection>`, which asks the open OMARemote window (over
   Quickshell IPC) to show the session or connect, or starts OMARemote to do so; with its switch
-  on for that connection, `omaremote open --window <connection>`.
+  on for that connection, `omaremote open --window <connection>`;
+- the install button checks the download with `gpgv` against `omaremote-release.gpg`, OMARemote's
+  release key (fingerprint `D7FC432CF643656A400BDDEB3BE7753BBB50B393`), before `sudo pacman -U`.
 
 ## Development
 
