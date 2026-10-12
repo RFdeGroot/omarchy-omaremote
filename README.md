@@ -21,8 +21,8 @@ OMARemote's release key signed it, and installs it with pacman, which also insta
 needs. A download without that signature is not installed, and neither is one built against a
 newer Qt than your system has (Apple Silicon builds can be ahead): update the system first with
 `omarchy update`. The same button updates an OMARemote that is too old for this plugin: it
-needs 0.4.1 or newer, the first that keeps connection names and hosts off command lines, and
-connects nothing through an older one.
+needs 0.4.2 or newer, the first that keeps connection names and hosts off command lines and out
+of desktop notifications, and connects nothing through an older one.
 
 The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `gpgv`, `sudo` and
 `pacman`, which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the
