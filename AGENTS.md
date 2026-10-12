@@ -7,7 +7,9 @@ a bar icon whose dropdown lists OMARemote's running sessions and favourite conne
 install OMARemote when it is missing or too old. `Panel.qml` is the bar button and popup (cursor,
 keys, scrolling), `PanelBody.qml` the dropdown's contents, `Service.qml` reads OMARemote, `Model.js`
 holds the pure logic. Look and feel follow Flea and omapods: keyboard first, quiet secondary text,
-colours always from the live Omarchy theme.
+colours always from the live Omarchy theme. Reach the palette as `Commons.Color` (with
+`import qs.Commons as Commons`), never a bare `Color`: from Qt 6.12 that name is Qt's own type, and
+every colour comes back empty (Omarchy's docs/omarchy-shell.md, "Theme tokens").
 
 ## The contract with OMARemote
 

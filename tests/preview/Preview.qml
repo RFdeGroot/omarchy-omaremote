@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 // The dropdown drawn from sample data (no real connections), in the popup card the bar uses, for
@@ -47,8 +48,8 @@ Item {
   QtObject {
     id: sampleHost
     property var remote: sampleRemote
-    property color foreground: Color.foreground
-    property color dim: Qt.darker(Color.foreground, 1.55)
+    property color foreground: Commons.Color.foreground
+    property color dim: Qt.darker(Commons.Color.foreground, 1.55)
     property string fontFamily: Style.font.family
     property string summary: stage.missing ? "Not installed" : stage.readError ? "Sessions unknown" : "3 sessions running"
     property bool busy: !stage.missing
@@ -67,8 +68,8 @@ Item {
     id: card
     width: Style.space(340)
     height: (body.item ? body.item.implicitHeight : 0) + contentTopInset + contentBottomInset
-    color: Color.popups.background
-    borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, Math.max(1, Style.space(2)))
+    color: Commons.Color.popups.background
+    borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border, Math.max(1, Style.space(2)))
     padding: Style.spacing.popupPadding
     radius: Style.cornerRadius
 

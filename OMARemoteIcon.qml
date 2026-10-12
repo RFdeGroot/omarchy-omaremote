@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import qs.Commons
+import qs.Commons as Commons
 
 // OMARemote's mark in one colour: a monitor showing the Omarchy mark, whose left connector runs on
 // into an arrow. The paths are the app icon's (share/icons/.../omaremote.svg in OMARemote), so bar
@@ -11,7 +12,7 @@ Item {
   id: root
 
   property real iconSize: Style.font.icon
-  property color color: Color.foreground
+  property color color: Commons.Color.foreground
 
   readonly property bool small: iconSize < 20
   // Whole pixels per cell, so every line stays one sharp pixel wide: 16 px draws it 1:1, centred.

@@ -253,3 +253,27 @@ test("install command: a failure ends the install, not the terminal's script", (
   assert.match(r.stdout, /^before\nCould not find an OMARemote release for x86_64 on GitHub\.\nafter 1\n$/)
   assert.doesNotMatch(r.log, /sudo/)
 })
+
+// From Qt 6.12 a bare `Color` is Qt's own type, not Omarchy's palette, and every colour reads empty.
+test("QML and JS reach the palette as Commons.Color, never a bare Color", () => {
+  const root = path.join(__dirname, "..")
+  const files = []
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith(".") || e.name === "node_modules") continue
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (/\.(qml|js)$/.test(e.name) && p !== __filename) files.push(p)
+    }
+  }
+  walk(root)
+  assert.ok(files.some(f => f.endsWith("Panel.qml")))
+  for (const file of files) {
+    const code = fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n").filter(line => !/^\s*\/\//.test(line)).join("\n")
+    const name = path.relative(root, file)
+    assert.doesNotMatch(code, /(?<![\w.])Color\s*[.[]/, name + " uses a bare Color")
+    if (/\bCommons\./.test(code))
+      assert.match(code, /^import qs\.Commons as Commons$/m, name + " reads Commons. without the alias import")
+  }
+})

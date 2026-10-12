@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -106,7 +107,7 @@ Column {
         switchOn: host.opensInWindow(modelData.connection)
         switchHint: column.windowHint(modelData.connection)
         glyph: Model.sessionGlyph(modelData)
-        glyphColor: modelData.state === "connected" ? Color.accent : host.dim
+        glyphColor: modelData.state === "connected" ? Commons.Color.accent : host.dim
         title: modelData.name || modelData.host || ""
         subtitle: Model.sessionMeta(modelData)
       }
