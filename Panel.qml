@@ -36,9 +36,15 @@ Panel {
     return remote.canOpenInWindow && Model.opensInWindow(windowConnections, connectionId)
   }
 
+  // A hotkey window always opens on its own special workspace, so the switch means nothing there.
+  function hasWindowSwitch(row) {
+    return !!row && remote.canOpenInWindow
+      && (row.kind === "favourite" || (row.kind === "session" && !Model.isHotkey(row.item)))
+  }
+
   function toggleWindow(index) {
     var row = rows[index]
-    if (!row || (row.kind !== "session" && row.kind !== "favourite") || !remote.canOpenInWindow) return
+    if (!hasWindowSwitch(row)) return
     var id = connectionOf(row)
     var known = remote.connections.map(function (c) { return c.id })
       .concat(remote.active.map(function (s) { return s.connection }))
@@ -122,7 +128,8 @@ Panel {
       root.close()
       return
     }
-    remote.open(connectionOf(row), opensInWindow(connectionOf(row)))
+    if (row.kind === "session" && Model.isHotkey(row.item)) remote.toggle(connectionOf(row))
+    else remote.open(connectionOf(row), opensInWindow(connectionOf(row)))
     root.close()
   }
 
@@ -169,6 +176,7 @@ Panel {
     function refresh() {}
     function listSessions() {}
     function open(id, inWindow) {}
+    function toggle(id) {}
     function openApp() {}
     function install() {}
   }

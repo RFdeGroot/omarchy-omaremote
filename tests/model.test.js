@@ -90,6 +90,25 @@ test("a click opens in a tab, or with --window in a window of its own", () => {
   assert.deepStrictEqual(Model.openCommand("pi", true), ["uwsm-app", "--", "omaremote", "open", "--window", "pi"])
 })
 
+test("an id that would read as an option never reaches the command line", () => {
+  assert.ok(Model.isSafeId("c-mfx3k2a9q1"))
+  assert.ok(Model.isSafeId("pi"))
+  for (const id of ["--help", "-h", "--window", "", null, undefined]) assert.ok(!Model.isSafeId(id), String(id))
+})
+
+test("a hotkey window is OMARemote's verdict, toggled like its shortcut", () => {
+  const git = { protocol: "ssh", state: "connected", tab: true, view: "window", hotkey: true }
+  assert.ok(Model.isHotkey(git))
+  // Missing (an older OMARemote) or anything but true: an ordinary session.
+  assert.ok(!Model.isHotkey({ ...git, hotkey: undefined }))
+  assert.ok(!Model.isHotkey({ ...git, hotkey: "true" }))
+  assert.ok(!Model.isHotkey(null))
+  assert.strictEqual(Model.sessionMeta(git), "SSH · connected · hotkey window")
+  // Between connecting and its window claiming it, OMARemote may still report the tab.
+  assert.strictEqual(Model.sessionMeta({ ...git, state: "connecting", view: "tab" }), "SSH · connecting… · hotkey window")
+  assert.deepStrictEqual(Model.toggleCommand("c-git"), ["uwsm-app", "--", "omaremote", "toggle", "c-git"])
+})
+
 test("open in own window is chosen per connection", () => {
   assert.deepStrictEqual(Model.windowConnections(undefined), [])
   assert.ok(Model.opensInWindow(["pi"], "pi"))

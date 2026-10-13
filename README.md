@@ -21,9 +21,10 @@ OMARemote's release key signed it, and installs it with pacman, which also insta
 needs. A download without that signature is not installed, and neither is one built against a
 newer Qt than your system has (Apple Silicon builds can be ahead): update the system first with
 `omarchy update`. The same button updates an OMARemote that is too old for this plugin: it
-needs 0.4.3 or newer (0.4.2 keeps connection names and hosts off command lines and out of
-desktop notifications, 0.4.3 fixes OMARemote's own updater), and connects nothing through an older
-one.
+needs 0.5.2 or newer (0.4.2 keeps connection names and hosts off command lines and out of
+desktop notifications, 0.5.1 keeps its text fields from reading the clipboard while nobody types in
+them and says which sessions are hotkey windows, 0.5.2 takes in no synced connection id its command
+line would read as an option), and connects nothing through an older one.
 
 The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `gpgv`, `sudo` and
 `pacman`, which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the
@@ -40,13 +41,15 @@ if you no longer want it.
 
 ## Use
 
-- **Active**: sessions that are connecting or connected. Click one to bring it forward.
+- **Active**: sessions that are connecting or connected. Click one to bring it forward. A hotkey
+  window (a connection OMARemote shows and hides with a shortcut of its own) does what its shortcut
+  does: shown and focused, it hides; otherwise it comes forward.
 - **Favourites**: connections starred (★) in OMARemote that are not running. Click one to connect
   it.
 - **Own window**: the switch on each row (or `w`) sets where that connection opens: off, in its
   tab in OMARemote; on, in a floating window of its own on the workspace you are on. A session in
   a tab moves out of it without reconnecting, and one in its own window comes over to this
-  workspace. Needs OMARemote 0.1.6-alpha or newer; with an older one the panel offers the update.
+  workspace. Running hotkey windows have no switch: they always open on their own workspace.
 - The button at the top right opens OMARemote itself; so does a middle click on the bar icon.
 
 | Key | In the panel |
@@ -62,8 +65,9 @@ if you no longer want it.
 ## Settings
 
 **Hide the icon while OMARemote is closed and no session is running** (off by default). With it
-on, the icon shows only while OMARemote is open or a session runs (sessions keep running after
-the window closes). It always shows while OMARemote is missing, so it can offer to install it.
+on, the icon shows only while OMARemote is open or a session runs (a session in a window of its
+own keeps running after OMARemote's window closes). It always shows while OMARemote is missing, so
+it can offer to install it.
 
 Which connections open in their own window is saved with the plugin's other settings, so it
 stays as you left it, on every monitor.
@@ -78,7 +82,8 @@ The plugin reads what OMARemote reports and does not keep state of its own:
   are watched for changes rather than polled;
 - a click runs `omaremote open <connection>`, which asks the open OMARemote window (over
   Quickshell IPC) to show the session or connect, or starts OMARemote to do so; with its switch
-  on for that connection, `omaremote open --window <connection>`;
+  on for that connection, `omaremote open --window <connection>`; on a running session that
+  `omaremote-session list` marks `hotkey`, `omaremote toggle <connection>`;
 - the install button checks the download with `gpgv` against `omaremote-release.gpg`, OMARemote's
   release key (fingerprint `D7FC432CF643656A400BDDEB3BE7753BBB50B393`), and compares the Qt in
   the package's `.BUILDINFO` with the installed `qt6-base`, before `sudo pacman -U`.

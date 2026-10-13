@@ -122,6 +122,14 @@ function inOwnWindow(session) {
   return typeof session.view === "string" ? session.view === "window" : session.tab === false
 }
 
+// Connection ids go on OMARemote's command line, and a program there reads one that starts with
+// "-" as an option of its own. OMARemote never makes such ids, but sync could bring one in, so the
+// panel does not pass it on.
+function isSafeId(connectionId) {
+  var id = String(connectionId === undefined || connectionId === null ? "" : connectionId)
+  return id !== "" && id.charAt(0) !== "-"
+}
+
 // The command a click runs: bring the session forward, or connect. With `inWindow`, the session
 // goes to a floating window of its own on the current workspace (OMARemote 0.1.6-alpha and newer).
 // Through uwsm-app, as Omarchy launches apps, so a newly started OMARemote runs in its own unit
@@ -130,14 +138,27 @@ function openCommand(connectionId, inWindow) {
   return ["uwsm-app", "--", "omaremote", "open"].concat(inWindow ? ["--window"] : [], [String(connectionId)])
 }
 
+// The command a click on a running hotkey window runs: shown and focused, it hides, as its
+// shortcut would; otherwise it is shown and focused. Never moved to a normal workspace.
+function toggleCommand(connectionId) {
+  return ["uwsm-app", "--", "omaremote", "toggle", String(connectionId)]
+}
+
 // The glyph for a running session, as OMARemote shows it: a terminal for SSH, a monitor otherwise.
 function sessionGlyph(session) {
   return String((session && session.protocol) || "").toLowerCase() === "ssh" ? "\uf120" : "\uf108"
 }
 
+// OMARemote decides which connections open as hotkey windows (a special workspace of their own,
+// shown and hidden by a shortcut); the panel only reads its verdict.
+function isHotkey(session) {
+  return !!session && session.hotkey === true
+}
+
 function sessionMeta(session) {
   var state = session.state === "connecting" ? "connecting…" : "connected"
-  return protocolLabel(session) + " · " + state + (inOwnWindow(session) ? " · own window" : "")
+  var where = isHotkey(session) ? " · hotkey window" : inOwnWindow(session) ? " · own window" : ""
+  return protocolLabel(session) + " · " + state + where
 }
 
 function favouriteMeta(connection) {
@@ -203,5 +224,6 @@ if (typeof module !== "undefined")
     parseConnections: parseConnections, hasFavourites: hasFavourites, parseSessions: parseSessions,
     sessionGlyph: sessionGlyph, sessionMeta: sessionMeta, favouriteMeta: favouriteMeta, summary: summary,
     RELEASE_KEY: RELEASE_KEY, installCommand: installCommand, openCommand: openCommand,
+    isHotkey: isHotkey, toggleCommand: toggleCommand, isSafeId: isSafeId,
     windowConnections: windowConnections, opensInWindow: opensInWindow, setOpensInWindow: setOpensInWindow
   }

@@ -32,7 +32,7 @@ Item {
     property var active: stage.missing ? [] : [
       { connection: "s-pi", name: "Raspberry Pi", protocol: "vnc", state: "connected", tab: true, view: "window" },
       { connection: "s-files", name: "File Server", protocol: "rdp", state: "connecting", tab: true },
-      { connection: "s-git", name: "Git Server", protocol: "ssh", state: "connected", tab: true, view: "tab" }
+      { connection: "s-git", name: "Git Server", protocol: "ssh", state: "connected", tab: true, view: "window", hotkey: true }
     ]
     property var favourites: stage.missing ? [] : [
       { id: "s-build", name: "Build Server", protocol: "rdp", host: "build01.acme.lan" },
@@ -41,6 +41,7 @@ Item {
     ]
     property var connections: favourites
     function open(id) {}
+    function toggle(id) {}
     function openApp() {}
     function install() {}
   }

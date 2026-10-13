@@ -103,7 +103,7 @@ Column {
         required property int index
         width: parent.width
         rowIndex: column.firstRow + index
-        showSwitch: host.remote.canOpenInWindow
+        showSwitch: host.remote.canOpenInWindow && !Model.isHotkey(modelData)
         switchOn: host.opensInWindow(modelData.connection)
         switchHint: column.windowHint(modelData.connection)
         glyph: Model.sessionGlyph(modelData)

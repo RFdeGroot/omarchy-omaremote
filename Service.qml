@@ -14,9 +14,10 @@ Item {
 
   // 0.4.2 keeps connection names, hosts and errors off command lines, which other accounts can
   // read, its notifications included (Omarchy's notification service hands their text to a shell);
-  // 0.4.3's own updater works again. With anything older the panel lists and connects nothing and
-  // offers the update instead.
-  property string minimumVersion: "0.4.3"
+  // 0.5.1's text fields stop reading the clipboard while nobody types in them, and its sessions say
+  // which are hotkey windows; 0.5.2 takes in no synced id that its command line would read as an
+  // option. With anything older the panel lists and connects nothing and offers the update instead.
+  property string minimumVersion: "0.5.2"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 
@@ -71,8 +72,14 @@ Item {
   // Shows the connection's running session, or connects it in a tab; starts OMARemote if needed.
   // `inWindow` only reaches an OMARemote that understands --window.
   function open(connectionId, inWindow) {
-    if (root.compatible)
+    if (root.compatible && Model.isSafeId(connectionId))
       Quickshell.execDetached(Model.openCommand(connectionId, inWindow === true && root.canOpenInWindow))
+  }
+
+  // A running hotkey window: shown, or hidden when it is shown and focused.
+  function toggle(connectionId) {
+    if (root.compatible && Model.isSafeId(connectionId))
+      Quickshell.execDetached(Model.toggleCommand(connectionId))
   }
 
   // The connection manager itself (a second launch focuses the open window).
