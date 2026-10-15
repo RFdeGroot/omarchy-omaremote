@@ -14,10 +14,11 @@ Item {
 
   // 0.4.2 keeps connection names, hosts and errors off command lines, which other accounts can
   // read, its notifications included (Omarchy's notification service hands their text to a shell);
-  // 0.5.1's text fields stop reading the clipboard while nobody types in them, and its sessions say
-  // which are hotkey windows; 0.5.2 takes in no synced id that its command line would read as an
-  // option. With anything older the panel lists and connects nothing and offers the update instead.
-  property string minimumVersion: "0.5.2"
+  // 0.5.1's sessions say which are hotkey windows; 0.5.2 takes in no synced id that its command line
+  // would read as an option; 0.7.0's text fields never read the clipboard by themselves, and a paste
+  // is bounded. With anything older the panel lists and connects nothing and offers the update
+  // instead.
+  property string minimumVersion: "0.7.0"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 

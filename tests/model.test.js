@@ -90,6 +90,17 @@ test("a click opens in a tab, or with --window in a window of its own", () => {
   assert.deepStrictEqual(Model.openCommand("pi", true), ["uwsm-app", "--", "omaremote", "open", "--window", "pi"])
 })
 
+test("a session whose connection is not saved still shows, by its own name and host", () => {
+  // OMARemote 0.7's quick connections run under q- ids that never appear in `connections`, as
+  // does a connection deleted while its session runs.
+  const quick = { id: "s-9", connection: "q-mfx3k2a9q1", name: "", host: "kiosk01.acme.lan", protocol: "rdp", state: "connected", tab: true, view: "tab" }
+  assert.deepStrictEqual(Model.activeSessions([quick]), [quick])
+  assert.deepStrictEqual(Model.favourites(connections, [quick]), Model.favourites(connections, []))
+  assert.strictEqual(Model.sessionMeta(quick), "RDP · connected")
+  assert.ok(Model.isSafeId(quick.connection))
+  assert.deepStrictEqual(Model.openCommand(quick.connection, false), ["uwsm-app", "--", "omaremote", "open", "q-mfx3k2a9q1"])
+})
+
 test("an id that would read as an option never reaches the command line", () => {
   assert.ok(Model.isSafeId("c-mfx3k2a9q1"))
   assert.ok(Model.isSafeId("pi"))

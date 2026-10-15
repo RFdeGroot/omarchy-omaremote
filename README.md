@@ -21,10 +21,11 @@ OMARemote's release key signed it, and installs it with pacman, which also insta
 needs. A download without that signature is not installed, and neither is one built against a
 newer Qt than your system has (Apple Silicon builds can be ahead): update the system first with
 `omarchy update`. The same button updates an OMARemote that is too old for this plugin: it
-needs 0.5.2 or newer (0.4.2 keeps connection names and hosts off command lines and out of
-desktop notifications, 0.5.1 keeps its text fields from reading the clipboard while nobody types in
-them and says which sessions are hotkey windows, 0.5.2 takes in no synced connection id its command
-line would read as an option), and connects nothing through an older one.
+needs 0.7.0 or newer (0.4.2 keeps connection names and hosts off command lines and out of
+desktop notifications, 0.5.1 says which sessions are hotkey windows, 0.5.2 takes in no synced
+connection id its command line would read as an option, 0.7.0 keeps its text fields from reading
+the clipboard by themselves and bounds what a paste takes in), and connects nothing through an older
+one.
 
 The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `gpgv`, `sudo` and
 `pacman`, which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the
@@ -98,6 +99,12 @@ tests/preview.sh                # redraws preview.png from sample data, in your 
 
 `PanelBody.qml` is the dropdown's contents, apart from the popup in `Panel.qml`, so the preview
 can draw it offscreen from sample data; `Service.qml` reads OMARemote, `Model.js` holds the logic.
+
+## How it is made
+
+The plugin is written with an AI coding assistant ([Claude Code](https://claude.com/claude-code)).
+I decide what it does and how, try every change myself, and nothing is released without passing
+its tests. Bugs are still mine: please report them.
 
 ## License
 
