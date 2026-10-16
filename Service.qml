@@ -21,9 +21,11 @@ Item {
   // the microphone, or moves a connection with a chosen ssh key to another host, and writes no ssh
   // host pattern; 0.9.1 also asks when a synced move into another group would share or point
   // elsewhere through that group's settings; 0.9.2 asks the same before a synced restore from the
-  // trash, and gives a new synced connection no group credential set. With anything older the
-  // panel lists and connects nothing and offers the update instead.
-  property string minimumVersion: "0.9.2"
+  // trash, and gives a new synced connection no group credential set; 0.9.3 also asks before a
+  // synced group deletion drops a gateway, KDC or security level, counts the clipboard as sharing,
+  // and skips malformed sync files. With anything older the panel lists and connects nothing and
+  // offers the update instead.
+  property string minimumVersion: "0.9.3"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 
