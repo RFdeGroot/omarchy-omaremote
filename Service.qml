@@ -19,9 +19,10 @@ Item {
   // is bounded; 0.8.0 writes no synced name into ssh's config with its line breaks (they could add
   // ssh options, a ProxyCommand among them); 0.8.2 asks before a synced change shares a drive or
   // the microphone, or moves a connection with a chosen ssh key to another host, and writes no ssh
-  // host pattern. With anything older the panel lists and connects nothing and offers the update
-  // instead.
-  property string minimumVersion: "0.8.2"
+  // host pattern; 0.9.1 also asks when a synced move into another group would share or point
+  // elsewhere through that group's settings. With anything older the panel lists and connects
+  // nothing and offers the update instead.
+  property string minimumVersion: "0.9.1"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 
