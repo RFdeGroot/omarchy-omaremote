@@ -17,9 +17,11 @@ Item {
   // 0.5.1's sessions say which are hotkey windows; 0.5.2 takes in no synced id that its command line
   // would read as an option; 0.7.0's text fields never read the clipboard by themselves, and a paste
   // is bounded; 0.8.0 writes no synced name into ssh's config with its line breaks (they could add
-  // ssh options, a ProxyCommand among them). With anything older the panel lists and connects
-  // nothing and offers the update instead.
-  property string minimumVersion: "0.8.1"
+  // ssh options, a ProxyCommand among them); 0.8.2 asks before a synced change shares a drive or
+  // the microphone, or moves a connection with a chosen ssh key to another host, and writes no ssh
+  // host pattern. With anything older the panel lists and connects nothing and offers the update
+  // instead.
+  property string minimumVersion: "0.8.2"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 
