@@ -6,25 +6,22 @@ import qs.Ui
 import "Model.js" as Model
 
 // What the dropdown shows: the hero, the install row when OMARemote is missing or too old, and the
-// ACTIVE and FAVOURITES rows, each with a switch for opening it in a window of its own. Kept apart from Panel.qml so tests/preview can draw it from sample data; `host`
-// is the Panel (cursor, colours, actions) and `host.remote` its Service.
+// ACTIVE and FAVOURITES rows, each with a switch for opening it in a window of its own. Kept apart
+// from Panel.qml so tests/preview can draw it from sample data; `host` is the Panel (cursor,
+// colours, actions) and `host.remote` its Service.
 Column {
   id: column
   property var host: null
 
   spacing: Style.space(12)
 
-  // The row the panel's cursor index points at, in the order of host.rows.
+  // The row the panel's cursor index points at, in the order of host.rows: the install row alone,
+  // or the sessions and then the favourites.
   function rowItem(index) {
-    if (!host.remote.canOpenInWindow && index === 0) return installRow
-    if (!host.remote.compatible) return null
-    var i = index - column.firstRow
+    if (!host.remote.compatible) return index === 0 ? installRow : null
     var active = host.remote.active.length
-    return i < active ? activeRows.itemAt(i) : favouriteRows.itemAt(i - active)
+    return index < active ? activeRows.itemAt(index) : favouriteRows.itemAt(index - active)
   }
-
-  // Sessions and favourites start below the install row, when it shows.
-  readonly property int firstRow: host.remote.canOpenInWindow ? 0 : 1
 
   // Where a click opens this connection: a tab, or a floating window of its own.
   function windowHint(connectionId) {
@@ -49,7 +46,7 @@ Column {
       PanelActionButton {
         id: openAppButton
         visible: host.remote.installed
-        iconText: "󰏌"
+        iconText: "󰏌"  // open-in-new
         tooltipText: "Open OMARemote  (o)"
         foreground: host.foreground
         fontFamily: host.fontFamily
@@ -58,20 +55,19 @@ Column {
     }
   }
 
-  // Missing or too old: one action, which opens a terminal to install the newest release. Also
-  // shown for an OMARemote that works but is too old to open sessions in a window of their own.
+  // Missing or too old: one action, which opens a terminal to install the newest release.
   ActionRow {
     id: installRow
-    visible: !host.remote.canOpenInWindow
+    visible: !host.remote.compatible
     width: parent.width
     rowIndex: 0
-    glyph: "󰇚"
+    glyph: "󰇚"  // download
     title: host.remote.installing ? "Installing OMARemote…"
       : host.remote.installed ? "Update OMARemote" : "Install OMARemote"
     subtitle: host.remote.installing ? "Finish in the terminal; this updates by itself"
-      : host.remote.compatible ? "Needs " + host.remote.windowVersion + " for own windows"
-      : host.remote.installed ? "This plugin needs " + host.remote.minimumVersion + " or newer (you have " + host.remote.version + ")"
-      : "Remote desktops (RDP, VNC) and SSH, in tabs"
+      // Short enough that the installed version is not elided at the panel's width.
+      : host.remote.installed ? "Needs " + host.remote.minimumVersion + " or newer, you have " + host.remote.version
+      : "RDP, VNC, Gliff and SSH, in tabs"
   }
 
   // omaremote-session failed: say so rather than show an empty or stale list as if it were true.
@@ -102,8 +98,9 @@ Column {
         required property var modelData
         required property int index
         width: parent.width
-        rowIndex: column.firstRow + index
-        showSwitch: host.remote.canOpenInWindow && !Model.isHotkey(modelData)
+        rowIndex: index
+        // A hotkey window always opens on its own special workspace: no choice to offer.
+        showSwitch: !Model.isHotkey(modelData)
         switchOn: host.opensInWindow(modelData.connection)
         switchHint: column.windowHint(modelData.connection)
         glyph: Model.sessionGlyph(modelData)
@@ -143,11 +140,11 @@ Column {
         required property var modelData
         required property int index
         width: parent.width
-        rowIndex: column.firstRow + host.remote.active.length + index
-        showSwitch: host.remote.canOpenInWindow
+        rowIndex: host.remote.active.length + index
+        showSwitch: true
         switchOn: host.opensInWindow(modelData.id)
         switchHint: column.windowHint(modelData.id)
-        glyph: ""
+        glyph: ""  // star, as OMARemote marks favourites
         glyphColor: host.dim
         title: modelData.name || modelData.host || ""
         subtitle: Model.favouriteMeta(modelData)

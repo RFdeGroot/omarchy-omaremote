@@ -1,7 +1,8 @@
 #!/bin/bash
-# tests/preview.sh [out.png] [missing]: render the dropdown from sample data offscreen, in the
-# current Omarchy theme, at 2x. Default output: preview.png; "missing" draws the install state,
-# "error" a failed session read, "old" an OMARemote too old for own windows.
+# tests/preview.sh [out.png] [missing|old|error]: render the dropdown from sample data offscreen,
+# in the current Omarchy theme, at 2x (SCALE=n for another scale). Default output: preview.png;
+# "missing" draws the install row, "old" the update row of an OMARemote too old for this plugin,
+# "error" a failed session read.
 # Omarchy's shell modules are linked into a temporary folder, as plugin folders may hold no links.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)

@@ -5,15 +5,19 @@ import qs.Ui
 
 // The dropdown drawn from sample data (no real connections), in the popup card the bar uses, for
 // preview.png. tests/preview.sh renders it offscreen; its second argument picks another state
-// ("missing" for the install row, "error" for a failed session read, "old" for an OMARemote too
-// old for own windows).
+// ("missing" for the install row, "old" for the update row of an OMARemote too old for this
+// plugin, "error" for a failed session read). The sample versions only need to be on either side of
+// the minimum; they need not follow it.
 Item {
   id: stage
 
-  readonly property bool missing: Qt.application.arguments.indexOf("missing") >= 0 || sampleState === "missing"
-  readonly property bool readError: sampleState === "error"
   property string sampleState: ""
   property url bodySource: ""
+  readonly property bool missing: sampleState === "missing"
+  readonly property bool old: sampleState === "old"
+  readonly property bool readError: sampleState === "error"
+  // Installed and new enough: sessions and favourites show.
+  readonly property bool ready: !missing && !old
 
   width: card.width
   height: card.height
@@ -21,24 +25,22 @@ Item {
   QtObject {
     id: sampleRemote
     property bool installed: !stage.missing
-    property bool compatible: !stage.missing
+    property bool compatible: stage.ready
     property bool installing: false
-    property string version: stage.sampleState === "old" ? "0.1.4-alpha" : "0.1.6-alpha"
-    property string minimumVersion: "0.1.3-alpha"
-    property string windowVersion: "0.1.6-alpha"
-    property bool canOpenInWindow: !stage.missing && stage.sampleState !== "old"
+    property string version: stage.missing ? "" : stage.old ? "0.9.0" : "1.0.0"
+    property string minimumVersion: "0.9.3"
     property bool appRunning: true
     property bool readError: stage.readError
-    property var active: stage.missing ? [] : [
+    property var active: stage.ready ? [
       { connection: "s-pi", name: "Raspberry Pi", protocol: "vnc", state: "connected", tab: true, view: "window" },
       { connection: "s-files", name: "File Server", protocol: "rdp", state: "connecting", tab: true },
       { connection: "s-git", name: "Git Server", protocol: "ssh", state: "connected", tab: true, view: "window", hotkey: true }
-    ]
-    property var favourites: stage.missing ? [] : [
+    ] : []
+    property var favourites: stage.ready ? [
       { id: "s-build", name: "Build Server", protocol: "rdp", host: "build01.acme.lan" },
       { id: "s-design", name: "Design Workstation", protocol: "rdp", host: "design-ws01.acme.lan" },
       { id: "s-lobby", name: "Lobby Screen", protocol: "vnc", host: "lobbyscreen" }
-    ]
+    ] : []
     property var connections: favourites
     function open(id) {}
     function toggle(id) {}
@@ -52,12 +54,14 @@ Item {
     property color foreground: Commons.Color.foreground
     property color dim: Qt.darker(Commons.Color.foreground, 1.55)
     property string fontFamily: Style.font.family
-    property string summary: stage.missing ? "Not installed" : stage.readError ? "Sessions unknown" : "3 sessions running"
+    property string summary: stage.missing ? "Not installed" : stage.old ? "Needs a newer OMARemote"
+      : stage.readError ? "Sessions unknown" : "3 sessions running"
     property bool busy: !stage.missing
     property bool cursorActive: !stage.readError
     property var windowConnections: ["s-pi", "s-design"]
-    property int cursorIndex: stage.missing ? 0 : stage.sampleState === "old" ? 3 : 2
-    function opensInWindow(id) { return sampleRemote.canOpenInWindow && windowConnections.indexOf(id) !== -1 }
+    // On the install row when it shows, else on the third session.
+    property int cursorIndex: stage.ready ? 2 : 0
+    function opensInWindow(id) { return sampleRemote.compatible && windowConnections.indexOf(id) !== -1 }
     function toggleWindow(i) {}
     function rowHasCursor(i) { return cursorActive && cursorIndex === i }
     function pointerMoved(i, item, mouse) {}

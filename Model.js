@@ -31,6 +31,7 @@ function splitVersion(v) {
   }
 }
 
+// `have` is `omaremote --version` output (or a bare version); false when it holds no version.
 function versionAtLeast(have, want) {
   return parseVersion(have) !== "" && compareVersions(parseVersion(have), want) >= 0
 }
@@ -43,7 +44,8 @@ function byName(a, b) {
   return String(a.name || a.host || "").localeCompare(String(b.name || b.host || ""))
 }
 
-// Running sessions, one per connection (the newest wins), by name.
+// Running sessions, one per connection, by name. Of two sessions for one connection the first
+// listed wins, which is the newest: the contract has `omaremote-session list` sort newest first.
 function activeSessions(sessions) {
   var seen = {}
   var out = []
@@ -64,14 +66,20 @@ function favourites(connections, sessions) {
     .sort(byName)
 }
 
+// Only the entries that are objects: everything downstream reads fields off each one, and a stray
+// `null` in a hand-edited or synced file would otherwise throw there.
+function objectsOnly(list) {
+  return list.filter(function (item) { return item !== null && typeof item === "object" })
+}
+
 // The connections out of connections.json. Text that is empty or not JSON is most likely a file
 // caught mid-rewrite, so it yields `previous` (the last good read) rather than an empty list.
 function parseConnections(text, previous) {
   var fallback = Array.isArray(previous) ? previous : []
   try {
     var data = JSON.parse(String(text || ""))
-    if (Array.isArray(data)) return data
-    return data && Array.isArray(data.connections) ? data.connections : []
+    if (Array.isArray(data)) return objectsOnly(data)
+    return data && Array.isArray(data.connections) ? objectsOnly(data.connections) : []
   } catch (e) {
     return fallback
   }
@@ -87,12 +95,13 @@ function parseSessions(text, fallback) {
   if (fallback === undefined) fallback = []
   try {
     var data = JSON.parse(String(text || "[]"))
-    return Array.isArray(data) ? data : fallback
+    return Array.isArray(data) ? objectsOnly(data) : fallback
   } catch (e) {
     return fallback
   }
 }
 
+// "RDP", "VNC", "SSH", …; OMARemote's default protocol, RDP, when the item names none.
 function protocolLabel(item) {
   return String((item && item.protocol) || "rdp").toUpperCase()
 }
@@ -102,6 +111,7 @@ function windowConnections(value) {
   return Array.isArray(value) ? value.map(String) : []
 }
 
+// Whether the connection is in that list.
 function opensInWindow(list, connectionId) {
   return windowConnections(list).indexOf(String(connectionId)) !== -1
 }
@@ -155,14 +165,17 @@ function isHotkey(session) {
   return !!session && session.hotkey === true
 }
 
+// A running session's second line: "VNC · connected · own window".
 function sessionMeta(session) {
   var state = session.state === "connecting" ? "connecting…" : "connected"
   var where = isHotkey(session) ? " · hotkey window" : inOwnWindow(session) ? " · own window" : ""
   return protocolLabel(session) + " · " + state + where
 }
 
+// A favourite's second line: "RDP · design-ws01.acme.lan", or just "RDP" without a host.
 function favouriteMeta(connection) {
-  return protocolLabel(connection) + " · " + String(connection.host || "")
+  var host = String(connection.host || "")
+  return protocolLabel(connection) + (host !== "" ? " · " + host : "")
 }
 
 // One line for the panel's hero: what is going on right now.
@@ -179,6 +192,7 @@ function summary(installed, compatible, appRunning, activeCount, readError) {
 // omaremote-release.gpg beside this file. A key rotation is announced there first.
 var RELEASE_KEY = "D7FC432CF643656A400BDDEB3BE7753BBB50B393"
 
+// `s` as one single-quoted shell word, whatever it holds.
 function shellQuote(s) {
   return "'" + String(s).replace(/'/g, "'\\''") + "'"
 }
@@ -192,6 +206,7 @@ function shellQuote(s) {
 // keyring, which lacks OMARemote's key, and refuses the package.
 // The subshell keeps `set -e` and `exit` away from the terminal's wrapper script, which would
 // otherwise close the window before a failure can be read.
+// `fingerprint` defaults to RELEASE_KEY; the tests pass their throwaway key's.
 function installCommand(keyring, fingerprint) {
   return "(set -e; " +
     "url=$(curl -fsSL https://api.github.com/repos/" + REPOSITORY + "/releases" +

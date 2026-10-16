@@ -25,19 +25,16 @@ Item {
   // synced group deletion drops a gateway, KDC or security level, counts the clipboard as sharing,
   // and skips malformed sync files. With anything older the panel lists and connects nothing and
   // offers the update instead.
+  // `omaremote open --window` (0.1.6-alpha) is older than this, so every compatible OMARemote can
+  // open a connection in a window of its own.
   property string minimumVersion: "0.9.3"
-  // `omaremote open --window`, for the "Open in own window" toggle.
-  property string windowVersion: "0.1.6-alpha"
 
   property bool checked: false
   property bool installed: false
   property string version: ""
   readonly property bool compatible: installed && Model.versionAtLeast(version, minimumVersion)
-  readonly property bool canOpenInWindow: compatible && Model.versionAtLeast(version, windowVersion)
+  // An install or update started from the panel is under way, until a compatible version answers.
   property bool installing: false
-  // The version an install started from the panel waits for: the minimum, or the one the toggle
-  // needs when OMARemote works but is too old for it.
-  property string installWants: minimumVersion
 
   property var connections: []
   property var sessions: []
@@ -77,11 +74,11 @@ Item {
       listProcess.running = true
   }
 
-  // Shows the connection's running session, or connects it in a tab; starts OMARemote if needed.
-  // `inWindow` only reaches an OMARemote that understands --window.
+  // Shows the connection's running session, or connects it: in a tab, or with `inWindow` in a
+  // floating window of its own. Starts OMARemote if needed.
   function open(connectionId, inWindow) {
     if (root.compatible && Model.isSafeId(connectionId))
-      Quickshell.execDetached(Model.openCommand(connectionId, inWindow === true && root.canOpenInWindow))
+      Quickshell.execDetached(Model.openCommand(connectionId, inWindow === true))
   }
 
   // A running hotkey window: shown, or hidden when it is shown and focused.
@@ -99,7 +96,6 @@ Item {
   // Installs (or updates to) the newest release in a floating Omarchy terminal, where sudo can
   // ask for the password; the version check is repeated until the new one answers.
   function install() {
-    root.installWants = root.compatible ? root.windowVersion : root.minimumVersion
     root.installing = true
     var keyring = decodeURIComponent(Qt.resolvedUrl("omaremote-release.gpg").toString().replace(/^file:\/\//, ""))
     Quickshell.execDetached(["omarchy", "launch", "floating", "terminal", "with", "presentation", Model.installCommand(keyring)])
@@ -107,19 +103,19 @@ Item {
     installTimeout.restart()
   }
 
-  Component.onCompleted: refresh()
-
-  // The install poll covers an install started from the panel. OMARemote's window appearing is the
-  // cue for one done some other way, and for the bars of a replacement bar, which each run their
-  // own copy of this service.
-  onAppRunningChanged: if (appRunning && !canOpenInWindow) refresh()
-
   // A file watch only attaches to a file that exists, so a connections file that appears later
   // (a fresh install) is read again whenever there is a reason to look.
   function reloadConnections() {
     if (root.connectionsPath !== "" && !root.connectionsLoaded)
       connectionsFile.reload()
   }
+
+  Component.onCompleted: refresh()
+
+  // The install poll covers an install started from the panel. OMARemote's window appearing is the
+  // cue for one done some other way, and for the bars of a replacement bar, which each run their
+  // own copy of this service.
+  onAppRunningChanged: if (appRunning && !compatible) refresh()
 
   Process {
     id: versionProcess
@@ -129,7 +125,7 @@ Item {
       root.installed = exitCode === 0
       root.version = exitCode === 0 ? Model.parseVersion(versionOutput.text) : ""
       root.checked = true
-      if (root.installing && Model.versionAtLeast(root.version, root.installWants)) {
+      if (root.installing && Model.versionAtLeast(root.version, root.minimumVersion)) {
         root.installing = false
         installPoll.stop()
         installTimeout.stop()

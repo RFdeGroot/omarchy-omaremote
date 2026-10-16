@@ -1,6 +1,12 @@
 const test = require("node:test")
 const assert = require("node:assert")
+const fs = require("node:fs")
+const os = require("node:os")
+const path = require("node:path")
+const { spawnSync } = require("node:child_process")
 const Model = require("../Model.js")
+
+const pluginRoot = path.join(__dirname, "..")
 
 test("versions: numbers, then alpha < beta < release", () => {
   assert.strictEqual(Model.parseVersion("omaremote 0.1.3-alpha"), "0.1.3-alpha")
@@ -43,6 +49,14 @@ test("parsing tolerates missing or broken files", () => {
   assert.deepStrictEqual(Model.parseSessions("{}"), [])
 })
 
+test("entries that are not objects are dropped, so no row reads a field off null", () => {
+  // Panel.toggleWindow maps every connection to its id; a null there used to throw.
+  const text = JSON.stringify({ connections: [null, connections[0], "pi", 7] })
+  assert.deepStrictEqual(Model.parseConnections(text), [connections[0]])
+  assert.deepStrictEqual(Model.parseConnections(JSON.stringify([null, connections[1]])), [connections[1]])
+  assert.deepStrictEqual(Model.parseSessions(JSON.stringify([null, sessions[0]]), null), [sessions[0]])
+})
+
 test("a failed session read is told apart from no sessions", () => {
   assert.strictEqual(Model.parseSessions("not json", null), null)
   assert.strictEqual(Model.parseSessions("{}", null), null)
@@ -79,6 +93,8 @@ test("row and hero text", () => {
   assert.strictEqual(Model.sessionGlyph({ protocol: "vnc" }), "")
   assert.strictEqual(Model.sessionGlyph({}), "")
   assert.strictEqual(Model.favouriteMeta(connections[1]), "RDP · files.acme.lan")
+  // No host: no separator left dangling at the end.
+  assert.strictEqual(Model.favouriteMeta(connections[0]), "RDP")
   assert.strictEqual(Model.summary(false, false, false, 0), "Not installed")
   assert.strictEqual(Model.summary(true, false, false, 0), "Needs a newer OMARemote")
   assert.strictEqual(Model.summary(true, true, true, 2), "2 sessions running")
@@ -141,14 +157,11 @@ test("install command fetches the newest release for this machine", () => {
   assert.match(Model.installCommand("/it's here/k.gpg"), /--keyring '\/it'\\''s here\/k\.gpg'/)
 })
 
-const fs = require("node:fs"), os = require("node:os"), path = require("node:path")
-const { spawnSync } = require("node:child_process")
-
 test("the bundled keyring holds OMARemote's release key", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-key-test-"))
   try {
     const r = spawnSync("gpg", ["--homedir", home, "--batch", "--with-colons", "--show-keys",
-      path.join(__dirname, "..", "omaremote-release.gpg")], { encoding: "utf8" })
+      path.join(pluginRoot, "omaremote-release.gpg")], { encoding: "utf8" })
     const fingerprints = r.stdout.split("\n").filter(l => l.startsWith("fpr:")).map(l => l.split(":")[9])
     assert.deepStrictEqual(fingerprints, [Model.RELEASE_KEY])
   } finally {
@@ -284,9 +297,17 @@ test("install command: a failure ends the install, not the terminal's script", (
   assert.doesNotMatch(r.log, /sudo/)
 })
 
+// AGENTS.md: raise minimumVersion in manifest.json and Service.qml together.
+test("manifest.json and Service.qml ask for the same minimum OMARemote", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, "manifest.json"), "utf8"))
+  const service = fs.readFileSync(path.join(pluginRoot, "Service.qml"), "utf8")
+  const match = service.match(/property string minimumVersion: "([^"]+)"/)
+  assert.ok(match, "Service.qml has no minimumVersion")
+  assert.strictEqual(match[1], manifest.omaremote.minimumVersion)
+})
+
 // From Qt 6.12 a bare `Color` is Qt's own type, not Omarchy's palette, and every colour reads empty.
 test("QML and JS reach the palette as Commons.Color, never a bare Color", () => {
-  const root = path.join(__dirname, "..")
   const files = []
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -296,12 +317,12 @@ test("QML and JS reach the palette as Commons.Color, never a bare Color", () => 
       else if (/\.(qml|js)$/.test(e.name) && p !== __filename) files.push(p)
     }
   }
-  walk(root)
+  walk(pluginRoot)
   assert.ok(files.some(f => f.endsWith("Panel.qml")))
   for (const file of files) {
     const code = fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
       .split("\n").filter(line => !/^\s*\/\//.test(line)).join("\n")
-    const name = path.relative(root, file)
+    const name = path.relative(pluginRoot, file)
     assert.doesNotMatch(code, /(?<![\w.])Color\s*[.[]/, name + " uses a bare Color")
     if (/\bCommons\./.test(code))
       assert.match(code, /^import qs\.Commons as Commons$/m, name + " reads Commons. without the alias import")

@@ -9,39 +9,85 @@ import "Model.js" as Model
 
 // OMARemote in the bar: running sessions and favourite connections, one click to bring a session
 // forward or connect. Without OMARemote (or with one too old for this plugin) it offers to install.
+// This file is the bar button and the popup around PanelBody.qml: cursor, keys and scrolling.
 Panel {
   id: root
   moduleName: "rfdegroot.omaremote"
   ipcTarget: "rfdegroot.omaremote"
 
-  property int cursorIndex: 0
-  property bool cursorActive: false
+  // --- The service ---------------------------------------------------------------------------
+
+  // One Service for the bars on every monitor: Omarchy loads it once as this plugin's service and
+  // hands it to widgets in the built-in bar. A replacement bar gets no service lookup, so there
+  // each copy of the widget runs its own.
+  readonly property var sharedService: bar && bar.shell && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor(moduleName) : null
+  // For PanelBody too, which reads the service through its host.
+  readonly property var remote: sharedService || ownService.item || noService
+
+  // --- Settings ------------------------------------------------------------------------------
 
   readonly property bool autoHide: setting("autoHide", false) === true
-
 
   // The connections that open in a floating window of their own, by id. Kept in this widget's
   // shell.json entry like its other settings, so the choice survives restarts and the bars on
   // every monitor share it. Changed here at once; the entry written back sets it again through
   // onSettingsChanged.
   property var windowConnections: Model.windowConnections(setting("windowConnections", []))
-  onSettingsChanged: windowConnections = Model.windowConnections(setting("windowConnections", []))
 
+  // --- Look ----------------------------------------------------------------------------------
+
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color dim: Qt.darker(foreground, 1.55)
+  readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  // OMARemote's window is open or a session runs: the icon at full strength.
+  readonly property bool busy: remote.appRunning || remote.active.length > 0
+  readonly property color barIconColor: busy || !remote.compatible ? barForeground : Qt.darker(barForeground, 1.55)
+  readonly property string summary: remote.installing ? "Installing…"
+    : Model.summary(remote.installed, remote.compatible, remote.appRunning, remote.active.length, remote.readError)
+
+  // --- Rows and the cursor -------------------------------------------------------------------
+
+  // Every row the cursor can land on, top to bottom. PanelBody.rowItem() maps them back to items.
+  readonly property var rows: {
+    var out = []
+    // Missing or too old: the one row installs or updates it.
+    if (!remote.compatible) out.push({ kind: "install" })
+    if (remote.compatible && !remote.readError) {
+      remote.active.forEach(function (s) { out.push({ kind: "session", item: s }) })
+      remote.favourites.forEach(function (c) { out.push({ kind: "favourite", item: c }) })
+    }
+    return out
+  }
+
+  property int cursorIndex: 0
+  // The cursor shows only once the keyboard or the pointer has moved it, not when the panel opens.
+  property bool cursorActive: false
+
+  // Autohide hides the icon only while OMARemote is installed, closed and idle: the install
+  // button must stay reachable.
+  visible: !autoHide || !remote.checked || !remote.compatible || busy
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
+
+  // --- Functions -----------------------------------------------------------------------------
+
+  // The connection a row stands for: a session's, or the favourite itself.
   function connectionOf(row) {
     return row.kind === "session" ? row.item.connection : row.item.id
   }
 
-  // Only an OMARemote that understands `open --window` gets the choice.
   function opensInWindow(connectionId) {
-    return remote.canOpenInWindow && Model.opensInWindow(windowConnections, connectionId)
+    return remote.compatible && Model.opensInWindow(windowConnections, connectionId)
   }
 
   // A hotkey window always opens on its own special workspace, so the switch means nothing there.
   function hasWindowSwitch(row) {
-    return !!row && remote.canOpenInWindow
+    return !!row && remote.compatible
       && (row.kind === "favourite" || (row.kind === "session" && !Model.isHotkey(row.item)))
   }
 
+  // Flips "own window" for the row's connection and writes the list back to shell.json.
   function toggleWindow(index) {
     var row = rows[index]
     if (!hasWindowSwitch(row)) return
@@ -50,36 +96,12 @@ Panel {
       .concat(remote.active.map(function (s) { return s.connection }))
     windowConnections = Model.setOpensInWindow(windowConnections, id, !Model.opensInWindow(windowConnections, id), known)
     if (!bar || !bar.shell || typeof bar.shell.updateEntryInline !== "function") return
+    // updateEntryInline replaces the whole entry, so the other settings go along unchanged.
     var entry = { id: moduleName }
     for (var key in settings) if (key !== "id") entry[key] = settings[key]
     entry.windowConnections = windowConnections
     bar.shell.updateEntryInline(moduleName, entry)
   }
-  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
-  readonly property color dim: Qt.darker(foreground, 1.55)
-  readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property bool busy: remote.appRunning || remote.active.length > 0
-  readonly property color barIconColor: busy || !remote.compatible ? barForeground : Qt.darker(barForeground, 1.55)
-  readonly property string summary: remote.installing ? "Installing…"
-    : Model.summary(remote.installed, remote.compatible, remote.appRunning, remote.active.length, remote.readError)
-
-  // Every row the cursor can land on, top to bottom.
-  readonly property var rows: {
-    var out = []
-    // Missing or too old: to install it, or (when it works but is older) to update for windows.
-    if (!remote.canOpenInWindow) out.push({ kind: "install" })
-    if (remote.compatible && !remote.readError) {
-      remote.active.forEach(function (s) { out.push({ kind: "session", item: s }) })
-      remote.favourites.forEach(function (c) { out.push({ kind: "favourite", item: c }) })
-    }
-    return out
-  }
-
-  // Autohide hides the icon only while OMARemote is installed, closed and idle: the install
-  // button must stay reachable.
-  visible: !autoHide || !remote.checked || !remote.compatible || busy
-  implicitWidth: button.implicitWidth
-  implicitHeight: button.implicitHeight
 
   function rowHasCursor(index) {
     return cursorActive && cursorIndex === index
@@ -119,37 +141,34 @@ Panel {
     cursorIndex = index
   }
 
+  // What a click or ⏎ on a row does; the panel closes after it.
   function activate(index) {
     var row = rows[index]
     if (!row) return
     // Also while installing: the terminal may have been closed before it finished.
-    if (row.kind === "install") {
-      remote.install()
-      root.close()
-      return
-    }
-    if (row.kind === "session" && Model.isHotkey(row.item)) remote.toggle(connectionOf(row))
+    if (row.kind === "install") remote.install()
+    else if (row.kind === "session" && Model.isHotkey(row.item)) remote.toggle(connectionOf(row))
     else remote.open(connectionOf(row), opensInWindow(connectionOf(row)))
     root.close()
   }
 
+  // --- Handlers ------------------------------------------------------------------------------
+
+  onSettingsChanged: windowConnections = Model.windowConnections(setting("windowConnections", []))
+
   onOpenedChanged: if (opened) {
     cursorActive = false
-    // The first session or favourite, also below an update row.
-    cursorIndex = remote.compatible && !remote.canOpenInWindow && rows.length > 1 ? 1 : 0
+    cursorIndex = 0
     pointerGate.reset()
     if (panelFlick) panelFlick.contentY = 0
     remote.refresh()
     remote.listSessions()
     Qt.callLater(function () { keyCatcher.forceActiveFocus() })
   }
+
   onRowsChanged: cursorIndex = Math.max(0, Math.min(cursorIndex, rows.length - 1))
 
-  // One Service for the bars on every monitor: Omarchy loads it once as this plugin's service and
-  // hands it to widgets in the built-in bar. A replacement bar gets no service lookup, so there
-  // each copy of the widget runs its own.
-  readonly property var sharedService: bar && bar.shell && typeof bar.shell.serviceFor === "function"
-    ? bar.shell.serviceFor(moduleName) : null
+  // --- Children ------------------------------------------------------------------------------
 
   Loader {
     id: ownService
@@ -163,13 +182,11 @@ Panel {
     readonly property bool checked: false
     readonly property bool installed: false
     readonly property bool compatible: false
-    readonly property bool canOpenInWindow: false
     readonly property bool installing: false
     readonly property bool appRunning: false
     readonly property bool readError: false
     readonly property string version: ""
     readonly property string minimumVersion: ""
-    readonly property string windowVersion: ""
     readonly property var connections: []
     readonly property var active: []
     readonly property var favourites: []
@@ -180,9 +197,6 @@ Panel {
     function openApp() {}
     function install() {}
   }
-
-  // For PanelBody too, which reads the service through its host.
-  readonly property var remote: sharedService || ownService.item || noService
 
   PointerMoveGate {
     id: pointerGate
@@ -222,6 +236,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      // The first arrow or j/k only shows the cursor where it is; later ones move it.
       onMoveRequested: function (dx, dy) {
         if (!root.cursorActive) { root.cursorActive = true; return }
         if (dy !== 0) root.moveCursor(dy)
@@ -234,7 +249,8 @@ Panel {
         if (key === "o") { remote.openApp(); root.close() }
         else if (key === "r") { remote.refresh(); remote.listSessions() }
         else if (key === "w" && root.cursorActive) root.toggleWindow(root.cursorIndex)
-        else if (key === "i" && !remote.canOpenInWindow) root.activate(0)
+        // The install row is always row 0 when it shows.
+        else if (key === "i" && !remote.compatible) root.activate(0)
       }
 
       Flickable {
@@ -256,5 +272,4 @@ Panel {
       }
     }
   }
-
 }
