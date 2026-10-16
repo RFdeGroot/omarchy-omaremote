@@ -24,11 +24,12 @@ Item {
   // trash, and gives a new synced connection no group credential set; 0.9.3 also asks before a
   // synced group deletion drops a gateway, KDC or security level, counts the clipboard as sharing,
   // and skips malformed sync files; 0.9.4's session tabs read the clipboard only through a bounded
-  // wl-paste, and not at all when the connection does not share it. With anything older the panel
-  // lists and connects nothing and offers the update instead.
+  // wl-paste, and not at all when the connection does not share it; 0.9.5 caps the cursors a
+  // server sends (512x512, 64 kept), so a session cannot fill OMARemote's memory with them. With
+  // anything older the panel lists and connects nothing and offers the update instead.
   // `omaremote open --window` (0.1.6-alpha) is older than this, so every compatible OMARemote can
   // open a connection in a window of its own.
-  property string minimumVersion: "0.9.4"
+  property string minimumVersion: "0.9.5"
 
   property bool checked: false
   property bool installed: false
