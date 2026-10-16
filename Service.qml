@@ -20,9 +20,10 @@ Item {
   // ssh options, a ProxyCommand among them); 0.8.2 asks before a synced change shares a drive or
   // the microphone, or moves a connection with a chosen ssh key to another host, and writes no ssh
   // host pattern; 0.9.1 also asks when a synced move into another group would share or point
-  // elsewhere through that group's settings. With anything older the panel lists and connects
-  // nothing and offers the update instead.
-  property string minimumVersion: "0.9.1"
+  // elsewhere through that group's settings; 0.9.2 asks the same before a synced restore from the
+  // trash, and gives a new synced connection no group credential set. With anything older the
+  // panel lists and connects nothing and offers the update instead.
+  property string minimumVersion: "0.9.2"
   // `omaremote open --window`, for the "Open in own window" toggle.
   property string windowVersion: "0.1.6-alpha"
 
