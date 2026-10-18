@@ -19,9 +19,9 @@ Without OMARemote the panel offers to install it: *Install OMARemote* opens a te
 downloads the newest release for your machine (Intel/AMD or Apple Silicon), checks that
 OMARemote's release key signed it, and installs it with pacman, which also installs everything it
 needs. A download without that signature is not installed, and neither is one built against a
-newer Qt than your system has (Apple Silicon builds can be ahead): update the system first with
-`omarchy update`. The same button updates an OMARemote that is too old for this plugin: it
-needs 0.9.5 or newer (0.4.2 keeps connection names and hosts off command lines and out of
+newer Qt than your system has (a new release can be ahead of your system): update the system
+first with `omarchy update`. The same button updates an OMARemote that is too old for this
+plugin: it needs 0.9.6 or newer (0.4.2 keeps connection names and hosts off command lines and out of
 desktop notifications, 0.5.1 says which sessions are hotkey windows, 0.5.2 takes in no synced
 connection id its command line would read as an option, 0.7.0 keeps its text fields from reading
 the clipboard by themselves and bounds what a paste takes in, 0.8.0 keeps synced connection names
@@ -31,7 +31,8 @@ move into another group would do so through that group's settings, 0.9.2 also be
 restore from the trash, and gives a new synced connection no group credential set, 0.9.3 also before
 a synced group deletion drops a gateway, KDC or security level, and counts the clipboard as
 sharing, 0.9.4 keeps session tabs from reading the clipboard unbounded or when it is not
-shared, 0.9.5 caps the cursors a server sends), and connects nothing through an older one.
+shared, 0.9.5 caps the cursors a server sends, 0.9.6 serves a pasted clipboard file only while it
+is still the file that was offered), and connects nothing through an older one.
 
 The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `gpgv`, `sudo` and
 `pacman`, which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the

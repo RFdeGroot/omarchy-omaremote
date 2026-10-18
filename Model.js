@@ -219,9 +219,9 @@ function installCommand(keyring, fingerprint) {
     "gpgv --status-fd 1 --keyring " + shellQuote(keyring) + " \"$dir/signature\" \"$pkg\" 2>/dev/null" +
     " | grep -q \"^\\[GNUPG:\\] VALIDSIG " + (fingerprint || RELEASE_KEY) + " \"" +
     " || { echo \"The download is not signed by OMARemote's release key, so it is not installed.\"; exit 1; }; " +
-    // OMARemote's tab renderer only loads on the Qt it was built against or newer, and Arch Linux
-    // ARM can be ahead of this system. Pulling in the newer Qt would be a partial upgrade, so the
-    // system update comes first. Either version unreadable: no reason to refuse.
+    // OMARemote's tab renderer only loads on the Qt it was built against or newer, and a release can
+    // be built against a newer Qt than this system has. Pulling in the newer Qt would be a partial
+    // upgrade, so the system update comes first. Either version unreadable: no reason to refuse.
     "built=$(bsdtar -xOf \"$pkg\" .BUILDINFO 2>/dev/null" +
     " | sed -n 's/^installed = qt6-base-\\([0-9]*\\.[0-9]*\\)\\..*/\\1/p'); " +
     "have=$(pacman -Q qt6-base 2>/dev/null | awk '{ split($2, v, \".\"); print v[1] \".\" v[2] }'); " +
