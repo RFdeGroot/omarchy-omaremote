@@ -157,6 +157,12 @@ test("install command fetches the newest release for this machine", () => {
   assert.match(Model.installCommand("/it's here/k.gpg"), /--keyring '\/it'\\''s here\/k\.gpg'/)
 })
 
+// uwsm-app starts the terminal as a systemd unit, and systemd expands `${...}` in its command line
+// (an unreadable one, like `${url##*/}`, to nothing) before the shell runs it.
+test("install command has no ${...} for systemd to expand", () => {
+  assert.ok(!Model.installCommand("/plugin/omaremote-release.gpg").includes("${"))
+})
+
 test("the bundled keyring holds OMARemote's release key", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-key-test-"))
   try {

@@ -206,6 +206,9 @@ function shellQuote(s) {
 // keyring, which lacks OMARemote's key, and refuses the package.
 // The subshell keeps `set -e` and `exit` away from the terminal's wrapper script, which would
 // otherwise close the window before a failure can be read.
+// The terminal starts through uwsm-app as a systemd unit, and systemd (262 and newer, scopes too)
+// expands every `${...}` in its command line before bash sees it, emptying any it cannot read, so
+// the command uses `$(...)` and plain `$name` only.
 // `fingerprint` defaults to RELEASE_KEY; the tests pass their throwaway key's.
 function installCommand(keyring, fingerprint) {
   return "(set -e; " +
@@ -213,7 +216,7 @@ function installCommand(keyring, fingerprint) {
     " | grep -o \"https://[^\\\"]*/omaremote-[0-9][^/\\\"]*-$(uname -m)\\.pkg\\.tar\\.zst\\\"\"" +
     " | head -1 | tr -d '\"'); " +
     "[ -n \"$url\" ] || { echo \"Could not find an OMARemote release for $(uname -m) on GitHub.\"; exit 1; }; " +
-    "dir=$(mktemp -d); trap 'rm -rf \"$dir\"' EXIT; pkg=\"$dir/${url##*/}\"; " +
+    "dir=$(mktemp -d); trap 'rm -rf \"$dir\"' EXIT; pkg=\"$dir/$(basename \"$url\")\"; " +
     "curl -fL -o \"$pkg\" \"$url\"; " +
     "curl -fL -o \"$dir/signature\" \"$url.sig\" || { echo \"The release has no signature, so it is not installed.\"; exit 1; }; " +
     "gpgv --status-fd 1 --keyring " + shellQuote(keyring) + " \"$dir/signature\" \"$pkg\" 2>/dev/null" +
