@@ -197,6 +197,13 @@ function shellQuote(s) {
   return "'" + String(s).replace(/'/g, "'\\''") + "'"
 }
 
+// curl's options for one download made before anything checked it: HTTPS only (redirects too),
+// at most `maxBytes` (curl also stops a stream that never says its size) and at most `seconds` in
+// all, so a server that keeps sending can neither fill the disk nor hold the terminal for ever.
+function downloadLimits(maxBytes, seconds) {
+  return "--proto '=https' --proto-redir '=https' --connect-timeout 20 --max-time " + seconds + " --max-filesize " + maxBytes
+}
+
 // Downloads the newest release for this machine (alphas included), checks its signature against
 // OMARemote's release key and that this system's Qt is new enough for it, and installs it with
 // pacman, then starts OMARemote through uwsm-app, as the panel does. Run in a terminal, so sudo
@@ -209,16 +216,20 @@ function shellQuote(s) {
 // The terminal starts through uwsm-app as a systemd unit, and systemd (262 and newer, scopes too)
 // expands every `${...}` in its command line before bash sees it, emptying any it cannot read, so
 // the command uses `$(...)` and plain `$name` only.
+// Every download is bounded (downloadLimits): the release list to 4 MiB in a minute (436 KB in
+// October 2026), the package to 64 MiB in ten minutes (0.5 MB), its signature to 64 KiB.
 // `fingerprint` defaults to RELEASE_KEY; the tests pass their throwaway key's.
 function installCommand(keyring, fingerprint) {
   return "(set -e; " +
-    "url=$(curl -fsSL https://api.github.com/repos/" + REPOSITORY + "/releases" +
+    "url=$(curl -fsSL " + downloadLimits(4194304, 60) + " https://api.github.com/repos/" + REPOSITORY + "/releases" +
     " | grep -o \"https://[^\\\"]*/omaremote-[0-9][^/\\\"]*-$(uname -m)\\.pkg\\.tar\\.zst\\\"\"" +
     " | head -1 | tr -d '\"'); " +
     "[ -n \"$url\" ] || { echo \"Could not find an OMARemote release for $(uname -m) on GitHub.\"; exit 1; }; " +
     "dir=$(mktemp -d); trap 'rm -rf \"$dir\"' EXIT; pkg=\"$dir/$(basename \"$url\")\"; " +
-    "curl -fL -o \"$pkg\" \"$url\"; " +
-    "curl -fL -o \"$dir/signature\" \"$url.sig\" || { echo \"The release has no signature, so it is not installed.\"; exit 1; }; " +
+    "curl -fL " + downloadLimits(67108864, 600) + " -o \"$pkg\" \"$url\"" +
+    " || { echo \"The download failed or was larger than an OMARemote package can be, so it is not installed.\"; exit 1; }; " +
+    "curl -fL " + downloadLimits(65536, 60) + " -o \"$dir/signature\" \"$url.sig\"" +
+    " || { echo \"The release has no signature, so it is not installed.\"; exit 1; }; " +
     "gpgv --status-fd 1 --keyring " + shellQuote(keyring) + " \"$dir/signature\" \"$pkg\" 2>/dev/null" +
     " | grep -q \"^\\[GNUPG:\\] VALIDSIG " + (fingerprint || RELEASE_KEY) + " \"" +
     " || { echo \"The download is not signed by OMARemote's release key, so it is not installed.\"; exit 1; }; " +

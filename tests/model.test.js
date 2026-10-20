@@ -224,7 +224,11 @@ function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint, 
     stub("curl", 'echo "curl $*" >> "$LOG"\n' +
       'out=; prev=; for a in "$@"; do [[ $prev == -o ]] && out=$a; prev=$a; done\n' +
       'if [[ -z $out ]]; then cat "$WORK/releases.json"; exit; fi\n' +
-      'url=${@: -1}; src="$WORK/served/${url##*/}"; [[ -f $src ]] || exit 22; cp "$src" "$out"')
+      'url=${@: -1}; src="$WORK/served/${url##*/}"; [[ -f $src ]] || exit 22\n' +
+      // A served file holding TOO LARGE stands for one past the download's --max-filesize: curl
+      // keeps what came before the cap and fails.
+      'if [[ $(<"$src") == "TOO LARGE" ]]; then printf partial > "$out"; echo "curl: (63) Exceeded the maximum allowed file size" >&2; exit 63; fi\n' +
+      'cp "$src" "$out"')
     stub("uname", "echo x86_64")
     stub("sudo", 'echo "sudo $*" >> "$LOG"; [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"\n' +
       '[[ -e ${@: -1}.sig ]] && echo "signature beside the package" >> "$LOG"; true')
@@ -254,13 +258,35 @@ const pkg = "omaremote-0.4.0-1-x86_64.pkg.tar.zst"
 
 test("install command: downloads this machine's package, checks it, installs it, cleans up", () => {
   const r = runInstall(release, { [pkg]: { signed: "pkg" } })
-  assert.match(r.log, /curl -fL -o \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\n/)
-  assert.match(r.log, /curl -fL -o \S+\/signature https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\.sig\n/)
+  assert.match(r.log, /curl -fL .* -o \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\n/)
+  assert.match(r.log, /curl -fL .* -o \S+\/signature https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\.sig\n/)
   assert.match(r.log, /sudo pacman -U \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\npackage present\n/)
   // pacman -U would check a <package>.sig against its own keyring, which lacks OMARemote's key.
   assert.doesNotMatch(r.log, /signature beside the package/)
   assert.match(r.log, /setsid -f uwsm-app -- omaremote/)
   assert.match(r.stdout, /after 0/)
+  assert.deepStrictEqual(r.left, [])
+})
+
+// Everything is downloaded before the signature check, so a server could otherwise stream without
+// end (marketplace review #12133): each download is HTTPS only, capped in bytes and in time.
+test("install command: every download is HTTPS only and capped in size and time", () => {
+  const r = runInstall(release, { [pkg]: { signed: "pkg" } })
+  const calls = r.log.split("\n").filter(l => l.startsWith("curl "))
+  assert.strictEqual(calls.length, 3)
+  const caps = calls.map(c => {
+    assert.match(c, / --proto =https --proto-redir =https /)
+    assert.match(c, / --connect-timeout \d+ /)
+    assert.match(c, / --max-time \d+ /)
+    return Number(c.match(/ --max-filesize (\d+) /)[1])
+  })
+  assert.deepStrictEqual(caps, [4194304, 67108864, 65536])
+})
+
+test("install command: a package past its cap is not installed", () => {
+  const r = runInstall(release, { [pkg]: "TOO LARGE", [pkg + ".sig"]: "sig" })
+  assert.match(r.stdout, /^before\nThe download failed or was larger than an OMARemote package can be, so it is not installed\.\nafter 1\n$/)
+  assert.doesNotMatch(r.log, /sudo/)
   assert.deepStrictEqual(r.left, [])
 })
 
