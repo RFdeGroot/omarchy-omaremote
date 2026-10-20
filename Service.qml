@@ -28,11 +28,12 @@ Item {
   // server sends (512x512, 64 kept), so a session cannot fill OMARemote's memory with them; 0.9.6
   // serves a pasted clipboard file only while it is still the file that was offered; 0.9.7 keeps a
   // shared sync folder from planting files and never overwrites a connections file it cannot read;
-  // 0.9.10 caps what its updater and update checks download, in bytes and in time.
+  // 0.9.10 caps what its updater and update checks download, in bytes and in time, and 0.9.11 also
+  // bounds the time its update checks spend on headers and redirects.
   // With anything older the panel lists and connects nothing and offers the update instead.
   // `omaremote open --window` (0.1.6-alpha) is older than this, so every compatible OMARemote can
   // open a connection in a window of its own.
-  property string minimumVersion: "0.9.10"
+  property string minimumVersion: "0.9.11"
 
   property bool checked: false
   property bool installed: false
