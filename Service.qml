@@ -29,11 +29,13 @@ Item {
   // serves a pasted clipboard file only while it is still the file that was offered; 0.9.7 keeps a
   // shared sync folder from planting files and never overwrites a connections file it cannot read;
   // 0.9.10 caps what its updater and update checks download, in bytes and in time, and 0.9.11 also
-  // bounds the time its update checks spend on headers and redirects.
+  // bounds the time its update checks spend on headers and redirects; 0.9.12 bounds a Gliff
+  // server's video before FFmpeg allocates for it, caps RDP graphics surfaces, and limits every
+  // session process to 4 GiB of data.
   // With anything older the panel lists and connects nothing and offers the update instead.
   // `omaremote open --window` (0.1.6-alpha) is older than this, so every compatible OMARemote can
   // open a connection in a window of its own.
-  property string minimumVersion: "0.9.11"
+  property string minimumVersion: "0.9.12"
 
   property bool checked: false
   property bool installed: false

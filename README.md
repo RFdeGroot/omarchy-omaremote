@@ -21,7 +21,7 @@ OMARemote's release key signed it, and installs it with pacman, which also insta
 needs. A download without that signature is not installed, and neither is one built against a
 newer Qt than your system has (a new release can be ahead of your system): update the system
 first with `omarchy update`. The same button updates an OMARemote that is too old for this
-plugin: it needs 0.9.11 or newer (0.4.2 keeps connection names and hosts off command lines and out of
+plugin: it needs 0.9.12 or newer (0.4.2 keeps connection names and hosts off command lines and out of
 desktop notifications, 0.5.1 says which sessions are hotkey windows, 0.5.2 takes in no synced
 connection id its command line would read as an option, 0.7.0 keeps its text fields from reading
 the clipboard by themselves and bounds what a paste takes in, 0.8.0 keeps synced connection names
@@ -35,7 +35,8 @@ shared, 0.9.5 caps the cursors a server sends, 0.9.6 serves a pasted clipboard f
 is still the file that was offered, 0.9.7 keeps a shared sync folder from planting files and never
 overwrites a connections file it cannot read, 0.9.10 caps what its updater and update checks
 download, in bytes and in time, 0.9.11 also the time its update checks spend on headers and
-redirects), and connects nothing through an older one.
+redirects, 0.9.12 bounds the video a Gliff server sends before decoding it, caps RDP graphics
+surfaces and limits the memory each session takes), and connects nothing through an older one.
 
 The plugin needs nothing beyond Omarchy itself. The install button uses `curl`, `gpgv`, `sudo` and
 `pacman`, which Omarchy has; it runs only when you click it, and `sudo` asks for your password in the
