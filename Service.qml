@@ -6,7 +6,9 @@ import "Model.js" as Model
 
 // What the panel shows, read from OMARemote itself: whether it is installed (and new enough),
 // whether its window is open, its favourite connections, and the sessions it runs. Sessions and
-// connections are watched, not polled: OMARemote touches a "changes" file on every session event.
+// connections are watched, not polled: OMARemote touches a "changes" file on every session event,
+// and the favourites are asked for again whenever its connections file changes. The panel never
+// reads either file itself: OMARemote reads the connections within its own bounds.
 // Omarchy loads one copy as the plugin's service, shared by the bars on every monitor; a bar
 // without access to it (a replacement bar) makes its own (see Panel.qml).
 Item {
@@ -32,11 +34,15 @@ Item {
   // bounds the time its update checks spend on headers and redirects; 0.9.12 bounds a Gliff
   // server's video before FFmpeg allocates for it, caps RDP graphics surfaces, and limits every
   // session process to 4 GiB of data; 0.9.13 writes a pasted Gliff file only into the folder of
-  // the paste it belongs to, ending a paste when the server's clipboard changes.
+  // the paste it belongs to, ending a paste when the server's clipboard changes; 0.9.14 bounds
+  // what a sync round, an import and the session list take in, in total as well as per file;
+  // 0.9.15 reads its connections file only through bounded reads (the panel's favourites through
+  // `omaremote-session read favourites`), keeps a library to 2000 connections and syncs it in
+  // linear time.
   // With anything older the panel lists and connects nothing and offers the update instead.
   // `omaremote open --window` (0.1.6-alpha) is older than this, so every compatible OMARemote can
   // open a connection in a window of its own.
-  property string minimumVersion: "0.9.13"
+  property string minimumVersion: "0.9.15"
 
   property bool checked: false
   property bool installed: false
@@ -45,10 +51,13 @@ Item {
   // An install or update started from the panel is under way, until a compatible version answers.
   property bool installing: false
 
-  property var connections: []
+  // Every starred connection, running or not (at most 100, from `omaremote-session read favourites`);
+  // `favourites` leaves out the running ones.
+  property var starred: []
+  property bool connectionsExist: false
   property var sessions: []
   readonly property var active: Model.activeSessions(sessions)
-  readonly property var favourites: Model.favourites(connections, sessions)
+  readonly property var favourites: favouritesFailed ? [] : Model.favourites(starred, sessions)
 
   // The OMARemote window, found by its app id among the open windows.
   readonly property bool appRunning: {
@@ -61,12 +70,14 @@ Item {
 
   property string changesPath: ""
   property string connectionsPath: ""
-  property bool connectionsLoaded: false
 
   // omaremote-session answered with an error (or nothing usable): the panel says so instead of
   // showing an empty or stale list as if it were true.
   property bool pathsFailed: false
   property bool listFailed: false
+  // The favourites could not be read (the connections file refused or unreadable): the panel says
+  // so where they would be.
+  property bool favouritesFailed: false
   readonly property bool readError: compatible && (pathsFailed || listFailed)
 
   function refresh() {
@@ -107,16 +118,18 @@ Item {
   function install() {
     root.installing = true
     var keyring = decodeURIComponent(Qt.resolvedUrl("omaremote-release.gpg").toString().replace(/^file:\/\//, ""))
-    Quickshell.execDetached(["omarchy", "launch", "floating", "terminal", "with", "presentation", Model.installCommand(keyring)])
+    Quickshell.execDetached(["/usr/bin/omarchy", "launch", "floating", "terminal", "with", "presentation", Model.installCommand(keyring)])
     installPoll.restart()
     installTimeout.restart()
   }
 
-  // A file watch only attaches to a file that exists, so a connections file that appears later
-  // (a fresh install) is read again whenever there is a reason to look.
-  function reloadConnections() {
-    if (root.connectionsPath !== "" && !root.connectionsLoaded)
-      connectionsFile.reload()
+  function readFavourites() {
+    if (!root.compatible || root.connectionsPath === "")
+      return
+    if (favouritesProcess.running)
+      favouritesProcess.again = true
+    else
+      favouritesProcess.running = true
   }
 
   Component.onCompleted: refresh()
@@ -128,11 +141,12 @@ Item {
 
   Process {
     id: versionProcess
-    command: ["sh", "-c", "command -v omaremote >/dev/null 2>&1 && omaremote --version"]
+    command: Model.boundedCommand(["/usr/bin/sh", "-c", "command -v omaremote >/dev/null 2>&1 && omaremote --version"],
+      Model.READ_LIMITS.version)
     stdout: StdioCollector { id: versionOutput; waitForEnd: true }
     onExited: function (exitCode) {
-      root.installed = exitCode === 0
-      root.version = exitCode === 0 ? Model.parseVersion(versionOutput.text) : ""
+      root.installed = exitCode === 0 && Model.withinLimit(versionOutput.text, Model.READ_LIMITS.version)
+      root.version = root.installed ? Model.parseVersion(versionOutput.text) : ""
       root.checked = true
       if (root.installing && Model.versionAtLeast(root.version, root.minimumVersion)) {
         root.installing = false
@@ -146,14 +160,16 @@ Item {
   }
 
   // Where OMARemote keeps its connections and its session-change marker, as it reports them.
+  // Each answer is cut off past its cap (Model.READ_LIMITS), and a cut one counts as failed.
   Process {
     id: pathsProcess
-    command: ["omaremote-session", "paths"]
+    command: Model.boundedCommand(["omaremote-session", "paths"], Model.READ_LIMITS.paths)
     stdout: StdioCollector { id: pathsOutput; waitForEnd: true }
     onExited: function (exitCode) {
       var paths = null
       try {
-        if (exitCode === 0) paths = JSON.parse(pathsOutput.text)
+        if (exitCode === 0 && Model.withinLimit(pathsOutput.text, Model.READ_LIMITS.paths))
+          paths = JSON.parse(pathsOutput.text)
       } catch (e) {
         paths = null
       }
@@ -162,7 +178,7 @@ Item {
         return
       root.connectionsPath = paths.connections
       root.changesPath = paths.changes
-      root.reloadConnections()
+      root.readFavourites()
       root.listSessions()
     }
   }
@@ -170,10 +186,11 @@ Item {
   Process {
     id: listProcess
     property bool again: false
-    command: ["omaremote-session", "list"]
+    command: Model.boundedCommand(["omaremote-session", "list"], Model.READ_LIMITS.list)
     stdout: StdioCollector { id: listOutput; waitForEnd: true }
     onExited: function (exitCode) {
-      var parsed = exitCode === 0 ? Model.parseSessions(listOutput.text, null) : null
+      var whole = exitCode === 0 && Model.withinLimit(listOutput.text, Model.READ_LIMITS.list)
+      var parsed = whole ? Model.parseSessions(listOutput.text, null) : null
       root.listFailed = parsed === null
       if (parsed)
         root.sessions = parsed
@@ -184,30 +201,47 @@ Item {
     }
   }
 
-  FileView {
-    id: connectionsFile
-    path: root.connectionsPath
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: {
-      root.connectionsLoaded = true
-      root.connections = Model.parseConnections(text(), root.connections)
-    }
-    onLoadFailed: {
-      root.connectionsLoaded = false
-      root.connections = []
+  // The favourites: OMARemote reads its connections file, bounded, and answers with the starred
+  // ones. Refused or unreadable, it exits non-zero: the panel shows no favourites and says why.
+  Process {
+    id: favouritesProcess
+    property bool again: false
+    command: Model.boundedCommand(["omaremote-session", "read", "favourites"], Model.READ_LIMITS.favourites)
+    stdout: StdioCollector { id: favouritesOutput; waitForEnd: true }
+    onExited: function (exitCode) {
+      var whole = exitCode === 0 && Model.withinLimit(favouritesOutput.text, Model.READ_LIMITS.favourites)
+      var read = whole ? Model.parseFavourites(favouritesOutput.text) : null
+      root.favouritesFailed = read === null
+      root.starred = read ? read.favourites : []
+      root.connectionsExist = read ? read.exists : root.connectionsExist
+      if (again) {
+        again = false
+        running = true
+      }
     }
   }
 
+  // Only watched, never read here. It fires for a file that appears later too (a fresh install).
+  FileView {
+    path: root.connectionsPath
+    preload: false
+    blockAllReads: true
+    watchChanges: true
+    printErrors: false
+    onFileChanged: root.readFavourites()
+  }
+
+  // Only watched: what the marker holds means nothing, so it is never read.
   FileView {
     path: root.changesPath
+    preload: false
+    blockAllReads: true
     watchChanges: true
     printErrors: false
     onFileChanged: {
-      reload()
       root.listSessions()
-      root.reloadConnections()
+      if (!root.connectionsExist)
+        root.readFavourites()
     }
   }
 

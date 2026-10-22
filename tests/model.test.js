@@ -40,20 +40,26 @@ test("favourites: not the ones already running, by name", () => {
   assert.deepStrictEqual(Model.favourites(connections, sessions).map(c => c.id), ["design", "files"])
 })
 
-test("parsing tolerates missing or broken files", () => {
-  assert.deepStrictEqual(Model.parseConnections(""), [])
-  assert.deepStrictEqual(Model.parseConnections("not json"), [])
-  assert.strictEqual(Model.parseConnections(JSON.stringify({ connections })).length, 4)
-  assert.strictEqual(Model.parseConnections(JSON.stringify(connections)).length, 4)
-  assert.deepStrictEqual(Model.parseConnections("{}"), [])
+// `omaremote-session read favourites` (OMARemote 0.9.15) answers with the starred connections only.
+test("favourites are read from OMARemote's answer, and a broken one is told apart", () => {
+  const answer = { exists: true, favourites: [{ id: "pi", name: "Raspberry Pi", protocol: "vnc", group: "Lab" }], more: 0 }
+  assert.deepStrictEqual(Model.parseFavourites(JSON.stringify(answer)),
+    { exists: true, favourites: [{ id: "pi", name: "Raspberry Pi", host: undefined, protocol: "vnc", favourite: true }] })
+  assert.deepStrictEqual(Model.parseFavourites('{"exists": false, "favourites": [], "more": 0}'), { exists: false, favourites: [] })
+  // An answer longer than OMARemote ever gives is cut to its maximum before anything else.
+  const flood = JSON.stringify({ exists: true, favourites: Array.from({ length: 5000 }, (_, i) => ({ id: "c" + i })) })
+  assert.strictEqual(Model.parseFavourites(flood).favourites.length, Model.MAX_STARRED)
+  for (const text of ["", "not json", "{}", "[]", '{"favourites": {}}', '{"error": "too large", "broken": true}'])
+    assert.strictEqual(Model.parseFavourites(text), null, text)
+  // What it reads goes straight into Model.favourites.
+  const read = Model.parseFavourites(JSON.stringify({ exists: true, favourites: connections.filter(c => c.favourite) }))
+  assert.deepStrictEqual(Model.favourites(read.favourites, sessions).map(c => c.id), ["design", "files"])
   assert.deepStrictEqual(Model.parseSessions("{}"), [])
 })
 
 test("entries that are not objects are dropped, so no row reads a field off null", () => {
-  // Panel.toggleWindow maps every connection to its id; a null there used to throw.
-  const text = JSON.stringify({ connections: [null, connections[0], "pi", 7] })
-  assert.deepStrictEqual(Model.parseConnections(text), [connections[0]])
-  assert.deepStrictEqual(Model.parseConnections(JSON.stringify([null, connections[1]])), [connections[1]])
+  const text = JSON.stringify({ exists: true, favourites: [null, { id: "pi" }, "pi", 7] })
+  assert.deepStrictEqual(Model.parseFavourites(text).favourites.map(c => c.id), ["pi"])
   assert.deepStrictEqual(Model.parseSessions(JSON.stringify([null, sessions[0]]), null), [sessions[0]])
 })
 
@@ -63,12 +69,6 @@ test("a failed session read is told apart from no sessions", () => {
   assert.deepStrictEqual(Model.parseSessions("[]", null), [])
   assert.strictEqual(Model.summary(true, true, true, 0, true), "Sessions unknown")
   assert.strictEqual(Model.summary(false, false, false, 0, true), "Not installed")
-})
-
-test("a connections file caught mid-rewrite keeps the last good read", () => {
-  assert.strictEqual(Model.parseConnections("", connections), connections)
-  assert.strictEqual(Model.parseConnections('{"connections": [{"id": "pi"', connections), connections)
-  assert.deepStrictEqual(Model.parseConnections('{"connections": []}', connections), [])
 })
 
 test("favourites exist even when all of them are running", () => {
@@ -86,6 +86,60 @@ test("ids that name Object's members are listed like any other", () => {
   const favs = ids.map(id => ({ id: id, name: id, favourite: true }))
   assert.deepStrictEqual(Model.favourites(favs, []).map(c => c.id).sort(), ids.slice().sort())
   assert.deepStrictEqual(Model.favourites(favs, own), [])
+})
+
+// A sync folder decides how many favourites there are: each one is a row the shell draws.
+test("the lists stop at their caps, keeping the first by name", () => {
+  const many = Array.from({ length: 10000 }, (_, i) => ({ id: "c" + i, name: "n" + String(i).padStart(5, "0"), favourite: true }))
+  const favs = Model.favourites(many, [])
+  assert.strictEqual(favs.length, Model.MAX_FAVOURITES)
+  assert.deepStrictEqual(favs.slice(0, 2).map(c => c.id), ["c0", "c1"])
+  const running = many.map(c => ({ connection: c.id, name: c.name, state: "connected" }))
+  assert.strictEqual(Model.activeSessions(running).length, Model.MAX_ACTIVE)
+  // A favourite that runs past the cap is still left out of FAVOURITES: it runs.
+  assert.deepStrictEqual(Model.favourites(many, running), [])
+  assert.strictEqual(Model.favourites(many, [], Infinity).length, 10000)
+})
+
+test("synced names and hosts show as one line, without bidi controls, and not too long", () => {
+  assert.strictEqual(Model.displayText("File Server\nOMARemote · connected"), "File Server OMARemote · connected")
+  assert.strictEqual(Model.displayText("a\u2028b\u0085c\td"), "a b c d")
+  assert.strictEqual(Model.displayText("host\u202e.acme\u2066.lan\u200f"), "host.acme.lan")
+  assert.strictEqual(Model.displayText(null), "")
+  const long = Model.displayText("x".repeat(400000))
+  assert.strictEqual(long, "x".repeat(Model.MAX_TEXT) + "…")
+  // A cut never leaves half of a character that takes two UTF-16 units.
+  assert.strictEqual(Model.displayText("x".repeat(Model.MAX_TEXT - 1) + "😀"), "x".repeat(Model.MAX_TEXT - 1) + "…")
+  assert.strictEqual(Model.rowTitle({ name: "", host: "pi\n.lan" }), "pi .lan")
+  assert.strictEqual(Model.rowTitle({ name: "Büro" }), "Büro")
+  assert.strictEqual(Model.favouriteMeta({ protocol: "vnc\n", host: "\u202ehost" }), "VNC  · host")
+  assert.strictEqual(Model.sessionMeta({ protocol: "x".repeat(300), state: "connected" }).length, Model.MAX_TEXT + 1 + " · connected".length)
+})
+
+// What the panel reads from OMARemote is cut after its cap, and a cut answer is never parsed.
+test("answers are read up to their cap", () => {
+  const run = (command, max, seconds) => {
+    const [bin, ...args] = Model.boundedCommand(command, max, seconds)
+    return spawnSync(bin, args, { encoding: "utf8" })
+  }
+  const ok = run(["printf", "%s", "x".repeat(100)], 100)
+  assert.strictEqual(ok.status, 0)
+  assert.strictEqual(ok.stdout, "x".repeat(100))
+  // Past the cap nothing is printed and the read fails, whether the command keeps writing or has
+  // finished within the pipe's buffer, and counted in bytes: 60 "ü" are 120 bytes.
+  for (const command of [["yes"], ["printf", "%s", "x".repeat(101)], ["printf", "%s", "ü".repeat(60)]]) {
+    const r = run(command, 100)
+    assert.notStrictEqual(r.status, 0, command[0])
+    assert.strictEqual(r.stdout, "", command[0])
+  }
+  assert.strictEqual(run(["printf", "%s", "ü".repeat(50)], 100).stdout, "ü".repeat(50))
+  assert.notStrictEqual(run(["false"], 100).status, 0)
+  // An answer that never comes ends at the deadline.
+  const started = Date.now()
+  assert.notStrictEqual(run(["sleep", "30"], 100, 1).status, 0)
+  assert.ok(Date.now() - started < 5000)
+  // Arguments reach the command as they are, never through a shell.
+  assert.strictEqual(run(["printf", "%s", "$(id) ;"], 100).stdout, "$(id) ;")
 })
 
 test("row and hero text", () => {
@@ -149,11 +203,14 @@ test("open in own window is chosen per connection", () => {
   assert.deepStrictEqual(Model.windowConnections(undefined), [])
   assert.ok(Model.opensInWindow(["pi"], "pi"))
   assert.ok(!Model.opensInWindow(["pi"], "dc"))
-  const known = ["pi", "dc"]
-  assert.deepStrictEqual(Model.setOpensInWindow([], "dc", true, known), ["dc"])
-  assert.deepStrictEqual(Model.setOpensInWindow(["pi", "dc"], "pi", false, known), ["dc"])
-  // A connection deleted since is dropped when the list is next written.
-  assert.deepStrictEqual(Model.setOpensInWindow(["gone", "pi"], "dc", true, known), ["pi", "dc"])
+  assert.deepStrictEqual(Model.setOpensInWindow([], "dc", true), ["dc"])
+  assert.deepStrictEqual(Model.setOpensInWindow(["pi", "dc"], "pi", false), ["dc"])
+  assert.deepStrictEqual(Model.setOpensInWindow(["pi", "dc"], "pi", true), ["dc", "pi"])
+  // The panel cannot tell a deleted connection from one that is not starred: the newest choices stay.
+  const many = Array.from({ length: Model.MAX_WINDOW_CONNECTIONS }, (_, i) => "c" + i)
+  const out = Model.setOpensInWindow(many, "new", true)
+  assert.strictEqual(out.length, Model.MAX_WINDOW_CONNECTIONS)
+  assert.deepStrictEqual([out[0], out[out.length - 1]], ["c1", "new"])
 })
 
 test("install command fetches the newest release for this machine", () => {
@@ -170,6 +227,11 @@ test("install command fetches the newest release for this machine", () => {
 // (an unreadable one, like `${url##*/}`, to nothing) before the shell runs it.
 test("install command has no ${...} for systemd to expand", () => {
   assert.ok(!Model.installCommand("/plugin/omaremote-release.gpg").includes("${"))
+})
+
+// sudo gets the password and grep reads the signature verdict: neither may come from the user's PATH.
+test("install command takes its tools from /usr/bin, with pipefail", () => {
+  assert.ok(Model.installCommand("/k.gpg").startsWith("(set -e; set -o pipefail; PATH='/usr/bin'; export PATH; "))
 })
 
 test("the bundled keyring holds OMARemote's release key", () => {
@@ -205,7 +267,8 @@ test.after(() => {
 // The curl stub serves the release list and the files in `files` (name -> contents, or
 // { signed: contents } for a package with a valid signature beside it, { qt: "6.12.0-1" } for a
 // signed package built against that Qt). The pacman stub reports this system's Qt as `systemQt`.
-function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint, systemQt = "6.11.1-1") {
+// With `swap`, the package in root's folder is replaced right after it is copied there.
+function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint, systemQt = "6.11.1-1", swap = false) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "omaremote-install-test-"))
   try {
     const bin = path.join(work, "bin"), served = path.join(work, "served")
@@ -239,18 +302,24 @@ function runInstall(releasesJson, files = {}, fingerprint = signer.fingerprint, 
       'if [[ $(<"$src") == "TOO LARGE" ]]; then printf partial > "$out"; echo "curl: (63) Exceeded the maximum allowed file size" >&2; exit 63; fi\n' +
       'cp "$src" "$out"')
     stub("uname", "echo x86_64")
-    stub("sudo", 'echo "sudo $*" >> "$LOG"; [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"\n' +
-      '[[ -e ${@: -1}.sig ]] && echo "signature beside the package" >> "$LOG"; true')
+    // sudo runs what it is given (as this user), except pacman; root's folder goes in the log.
+    stub("sudo", 'echo "sudo $*" >> "$LOG"\n' +
+      'if [[ $1 == pacman ]]; then [[ -f ${@: -1} ]] && echo "package present" >> "$LOG"\n' +
+      '  [[ -e ${@: -1}.sig ]] && echo "signature beside the package" >> "$LOG"; exit 0; fi\n' +
+      'if [[ $1 == mktemp ]]; then out=$("$@"); echo "root $out" >> "$LOG"; echo "$out"; exit; fi\n' +
+      '"$@"; [[ $1 == install && -n $SWAP ]] && echo swapped > "${@: -1}$(basename "$4")"; true')
     stub("setsid", 'echo "setsid $*" >> "$LOG"')
     stub("pacman", '[[ $* == "-Q qt6-base" && -n $QT ]] && echo "qt6-base $QT"')
     const log = path.join(work, "log")
-    const script = "echo before; " + Model.installCommand(signer.keyring, fingerprint) + "; echo \"after $?\""
+    const script = "echo before; " + Model.installCommand(signer.keyring, fingerprint, bin + ":/usr/bin") + "; echo \"after $?\""
     const r = spawnSync("bash", ["-c", script], {
       encoding: "utf8",
-      env: { PATH: bin + ":" + process.env.PATH, LOG: log, WORK: work, TMPDIR: work, HOME: work, QT: systemQt }
+      env: { PATH: bin + ":" + process.env.PATH, LOG: log, WORK: work, TMPDIR: work, HOME: work, QT: systemQt, SWAP: swap ? "1" : "" }
     })
-    const left = fs.readdirSync(work).filter(n => n.startsWith("tmp."))
-    return { stdout: r.stdout, log: fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "", left }
+    const logText = fs.existsSync(log) ? fs.readFileSync(log, "utf8") : ""
+    const roots = [...logText.matchAll(/^root (\S+)$/gm)].map(m => m[1])
+    const left = fs.readdirSync(work).filter(n => n.startsWith("tmp.")).concat(roots.filter(d => fs.existsSync(d)))
+    return { stdout: r.stdout, log: logText, left }
   } finally {
     fs.rmSync(work, { recursive: true, force: true })
   }
@@ -267,9 +336,11 @@ const pkg = "omaremote-0.4.0-1-x86_64.pkg.tar.zst"
 
 test("install command: downloads this machine's package, checks it, installs it, cleans up", () => {
   const r = runInstall(release, { [pkg]: { signed: "pkg" } })
-  assert.match(r.log, /curl -fL .* -o \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\n/)
-  assert.match(r.log, /curl -fL .* -o \S+\/signature https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\.sig\n/)
-  assert.match(r.log, /sudo pacman -U \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\npackage present\n/)
+  assert.match(r.log, /curl -q -fL .* -o \S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\n/)
+  assert.match(r.log, /curl -q -fL .* -o \S+\/signature https:\/\/\S+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\.sig\n/)
+  // What pacman installs is root's copy, checked again there.
+  assert.match(r.log, /^root \/tmp\/omaremote-install\.\w+$/m)
+  assert.match(r.log, /sudo pacman -U \/tmp\/omaremote-install\.\w+\/omaremote-0\.4\.0-1-x86_64\.pkg\.tar\.zst\npackage present\n/)
   // pacman -U would check a <package>.sig against its own keyring, which lacks OMARemote's key.
   assert.doesNotMatch(r.log, /signature beside the package/)
   assert.match(r.log, /setsid -f uwsm-app -- omaremote/)
@@ -284,12 +355,20 @@ test("install command: every download is HTTPS only and capped in size and time"
   const calls = r.log.split("\n").filter(l => l.startsWith("curl "))
   assert.strictEqual(calls.length, 3)
   const caps = calls.map(c => {
+    assert.match(c, /^curl -q /)
     assert.match(c, / --proto =https --proto-redir =https /)
     assert.match(c, / --connect-timeout \d+ /)
     assert.match(c, / --max-time \d+ /)
     return Number(c.match(/ --max-filesize (\d+) /)[1])
   })
   assert.deepStrictEqual(caps, [4194304, 67108864, 65536])
+})
+
+test("install command: what pacman gets is checked again in root's folder", () => {
+  const r = runInstall(release, { [pkg]: { signed: "pkg" } }, signer.fingerprint, "6.11.1-1", true)
+  assert.match(r.stdout, /^before\nThe download is not signed by OMARemote's release key, so it is not installed\.\nafter 1\n$/)
+  assert.doesNotMatch(r.log, /sudo pacman/)
+  assert.deepStrictEqual(r.left, [])
 })
 
 test("install command: a package past its cap is not installed", () => {

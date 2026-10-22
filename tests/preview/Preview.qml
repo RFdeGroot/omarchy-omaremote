@@ -33,7 +33,7 @@ Item {
     property bool readError: stage.readError
     property var active: stage.ready ? [
       { connection: "s-pi", name: "Raspberry Pi", protocol: "vnc", state: "connected", tab: true, view: "window" },
-      { connection: "s-files", name: "File Server", protocol: "rdp", state: "connecting", tab: true },
+      { connection: "s-studio", name: "Studio Desktop", protocol: "gliff", state: "connecting", tab: true, view: "tab" },
       { connection: "s-git", name: "Git Server", protocol: "ssh", state: "connected", tab: true, view: "window", hotkey: true }
     ] : []
     property var favourites: stage.ready ? [
@@ -41,7 +41,9 @@ Item {
       { id: "s-design", name: "Design Workstation", protocol: "rdp", host: "design-ws01.acme.lan" },
       { id: "s-lobby", name: "Lobby Screen", protocol: "vnc", host: "lobbyscreen" }
     ] : []
-    property var connections: favourites
+    property var starred: favourites
+    property bool connectionsExist: true
+    property bool favouritesFailed: false
     function open(id) {}
     function toggle(id) {}
     function openApp() {}

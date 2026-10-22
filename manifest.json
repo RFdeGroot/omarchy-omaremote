@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "rfdegroot.omaremote",
-  "name": "OMARemote",
-  "version": "0.4.16",
+  "name": "OMARemote: RDP, VNC, Gliff & SSH",
+  "version": "0.4.17",
   "author": "Roelof de Groot",
   "license": "MIT",
-  "description": "OMARemote, the RDP, VNC and SSH remote desktop client, in the Omarchy bar: running sessions and favourite connections, one click to bring a session forward or connect. Offers to install OMARemote when it is missing.",
+  "description": "Remote desktop from your Omarchy bar. OMARemote connects to Windows over RDP, to any VNC server, to another Omarchy machine's Hyprland desktop over Gliff, and to servers over SSH. The bar lists your running sessions and starred connections: one click brings a session forward or connects, in a tab or a window of its own, and hotkey windows show and hide like their shortcut. No OMARemote yet? It installs the signed release for you.",
   "kinds": [
     "bar-widget",
     "service"
@@ -16,7 +16,7 @@
   },
   "barWidget": {
     "displayName": "OMARemote",
-    "description": "Running RDP, VNC and SSH sessions and favourite connections, a click away.",
+    "description": "Running RDP, VNC, Gliff and SSH sessions and favourite connections, a click away.",
     "category": "Network",
     "allowMultiple": false,
     "defaultSection": "right",
@@ -33,7 +33,7 @@
     ]
   },
   "omaremote": {
-    "minimumVersion": "0.9.13",
+    "minimumVersion": "0.9.15",
     "repository": "https://github.com/RFdeGroot/OMARemote"
   }
 }

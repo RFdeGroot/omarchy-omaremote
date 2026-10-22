@@ -106,7 +106,7 @@ Column {
         switchHint: column.windowHint(modelData.connection)
         glyph: Model.sessionGlyph(modelData)
         glyphColor: modelData.state === "connected" ? Commons.Color.accent : host.dim
-        title: modelData.name || modelData.host || ""
+        title: Model.rowTitle(modelData)
         subtitle: Model.sessionMeta(modelData)
       }
     }
@@ -115,7 +115,7 @@ Column {
   // Hidden when every favourite is running: they are all under ACTIVE then.
   Column {
     visible: host.remote.compatible && !host.remote.readError
-      && (host.remote.favourites.length > 0 || !Model.hasFavourites(host.remote.connections))
+      && (host.remote.favouritesFailed || host.remote.favourites.length > 0 || !Model.hasFavourites(host.remote.starred))
     width: parent.width
     spacing: Style.space(6)
 
@@ -128,7 +128,8 @@ Column {
       textFormat: Text.PlainText
       visible: host.remote.favourites.length === 0
       width: parent.width
-      text: host.remote.connections.length === 0 ? "No connections yet. Press o to open OMARemote."
+      text: host.remote.favouritesFailed ? "Could not read OMARemote's connections. Press r to retry."
+        : !host.remote.connectionsExist ? "No connections yet. Press o to open OMARemote."
         : "Mark connections with ★ in OMARemote to list them here."
       color: host.dim
       font.family: host.fontFamily
@@ -148,7 +149,7 @@ Column {
         switchHint: column.windowHint(modelData.id)
         glyph: ""  // star, as OMARemote marks favourites
         glyphColor: host.dim
-        title: modelData.name || modelData.host || ""
+        title: Model.rowTitle(modelData)
         subtitle: Model.favouriteMeta(modelData)
       }
     }

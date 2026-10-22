@@ -92,9 +92,7 @@ Panel {
     var row = rows[index]
     if (!hasWindowSwitch(row)) return
     var id = connectionOf(row)
-    var known = remote.connections.map(function (c) { return c.id })
-      .concat(remote.active.map(function (s) { return s.connection }))
-    windowConnections = Model.setOpensInWindow(windowConnections, id, !Model.opensInWindow(windowConnections, id), known)
+    windowConnections = Model.setOpensInWindow(windowConnections, id, !Model.opensInWindow(windowConnections, id))
     if (!bar || !bar.shell || typeof bar.shell.updateEntryInline !== "function") return
     // updateEntryInline replaces the whole entry, so the other settings go along unchanged.
     var entry = { id: moduleName }
@@ -187,7 +185,9 @@ Panel {
     readonly property bool readError: false
     readonly property string version: ""
     readonly property string minimumVersion: ""
-    readonly property var connections: []
+    readonly property bool favouritesFailed: false
+    readonly property bool connectionsExist: false
+    readonly property var starred: []
     readonly property var active: []
     readonly property var favourites: []
     function refresh() {}
