@@ -31,11 +31,12 @@ Item {
   // 0.9.10 caps what its updater and update checks download, in bytes and in time, and 0.9.11 also
   // bounds the time its update checks spend on headers and redirects; 0.9.12 bounds a Gliff
   // server's video before FFmpeg allocates for it, caps RDP graphics surfaces, and limits every
-  // session process to 4 GiB of data.
+  // session process to 4 GiB of data; 0.9.13 writes a pasted Gliff file only into the folder of
+  // the paste it belongs to, ending a paste when the server's clipboard changes.
   // With anything older the panel lists and connects nothing and offers the update instead.
   // `omaremote open --window` (0.1.6-alpha) is older than this, so every compatible OMARemote can
   // open a connection in a window of its own.
-  property string minimumVersion: "0.9.12"
+  property string minimumVersion: "0.9.13"
 
   property bool checked: false
   property bool installed: false

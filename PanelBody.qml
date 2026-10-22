@@ -72,6 +72,7 @@ Column {
 
   // omaremote-session failed: say so rather than show an empty or stale list as if it were true.
   Text {
+    textFormat: Text.PlainText
     visible: host.remote.compatible && host.remote.readError
     width: parent.width
     text: "Could not read OMARemote's sessions. Press r to retry."
@@ -124,6 +125,7 @@ Column {
       fontFamily: host.fontFamily
     }
     Text {
+      textFormat: Text.PlainText
       visible: host.remote.favourites.length === 0
       width: parent.width
       text: host.remote.connections.length === 0 ? "No connections yet. Press o to open OMARemote."

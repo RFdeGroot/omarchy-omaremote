@@ -46,8 +46,9 @@ function byName(a, b) {
 
 // Running sessions, one per connection, by name. Of two sessions for one connection the first
 // listed wins, which is the newest: the contract has `omaremote-session list` sort newest first.
+// No prototype on the maps below: a connection id like "constructor" must not find Object's member.
 function activeSessions(sessions) {
-  var seen = {}
+  var seen = Object.create(null)
   var out = []
   ;(sessions || []).forEach(function (s) {
     if (!isActive(s) || seen[s.connection]) return
@@ -59,7 +60,7 @@ function activeSessions(sessions) {
 
 // Favourite connections that are not running already (those are listed as active), by name.
 function favourites(connections, sessions) {
-  var running = {}
+  var running = Object.create(null)
   activeSessions(sessions).forEach(function (s) { running[s.connection] = true })
   return (connections || [])
     .filter(function (c) { return c && c.favourite === true && !running[c.id] })

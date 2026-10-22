@@ -79,6 +79,15 @@ test("favourites exist even when all of them are running", () => {
   assert.deepStrictEqual(Model.favourites([connections[0]], allRunning), [])
 })
 
+test("ids that name Object's members are listed like any other", () => {
+  const ids = ["constructor", "__proto__", "toString"]
+  const own = ids.map(id => ({ id: id, connection: id, name: id, state: "connected" }))
+  assert.deepStrictEqual(Model.activeSessions(own).map(s => s.id).sort(), ids.slice().sort())
+  const favs = ids.map(id => ({ id: id, name: id, favourite: true }))
+  assert.deepStrictEqual(Model.favourites(favs, []).map(c => c.id).sort(), ids.slice().sort())
+  assert.deepStrictEqual(Model.favourites(favs, own), [])
+})
+
 test("row and hero text", () => {
   assert.strictEqual(Model.sessionMeta(sessions[0]), "VNC · connected")
   assert.strictEqual(Model.sessionMeta(sessions[2]), "RDP · connecting… · own window")
@@ -329,7 +338,7 @@ test("install command: a failure ends the install, not the terminal's script", (
   assert.doesNotMatch(r.log, /sudo/)
 })
 
-// AGENTS.md: raise minimumVersion in manifest.json and Service.qml together.
+// docs/CONTRIBUTING.md: raise minimumVersion in manifest.json and Service.qml together.
 test("manifest.json and Service.qml ask for the same minimum OMARemote", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, "manifest.json"), "utf8"))
   const service = fs.readFileSync(path.join(pluginRoot, "Service.qml"), "utf8")

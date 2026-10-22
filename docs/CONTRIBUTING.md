@@ -1,4 +1,4 @@
-# Repository guidance
+# Contributing
 
 ## What this is
 
